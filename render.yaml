@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: 0xda-market-client-bot
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: MARKET_API_URL
+        value: https://zeroxda-market.onrender.com
+      - key: MARKET_API_TOKEN
+        sync: false
+      - key: PUBLIC_URL
+        sync: false

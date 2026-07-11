@@ -1,0 +1,70 @@
+# frozen_string_literal: true
+
+require "json"
+require "net/http"
+require "timeout"
+require "uri"
+
+module ZeroXDA
+  module MarketClientBot
+    class MarketAPI
+      class Error < StandardError
+        attr_reader :code
+
+        def initialize(message, code: "market_api_error")
+          @code = code
+          super(message)
+        end
+      end
+
+      def initialize(base_url:, token:)
+        raise ArgumentError, "Market API token must not be empty" if token.to_s.empty?
+
+        @base_url = URI("#{base_url.delete_suffix("/")}/")
+        @token = token
+      end
+
+      def authenticate_telegram(user:, chat:)
+        document = post(
+          "v1/auth/telegram",
+          telegram_user_id: user.fetch("id"),
+          chat_id: chat.fetch("id"),
+          username: user["username"],
+          first_name: user["first_name"],
+          last_name: user["last_name"],
+          language_code: user["language_code"]
+        )
+        document.fetch("data")
+      end
+
+      private
+
+      def post(path, payload)
+        uri = URI.join(@base_url, path)
+        request = Net::HTTP::Post.new(uri)
+        request["authorization"] = "Bearer #{@token}"
+        request["content-type"] = "application/json"
+        request.body = JSON.generate(payload)
+        response = Net::HTTP.start(
+          uri.host,
+          uri.port,
+          use_ssl: uri.scheme == "https"
+        ) do |http|
+          http.open_timeout = 5
+          http.read_timeout = 10
+          http.request(request)
+        end
+        document = JSON.parse(response.body)
+        return document if response.is_a?(Net::HTTPSuccess)
+
+        failure = document.fetch("errors", [{}]).first
+        raise Error.new(
+          failure["message"] || "Market API request failed",
+          code: failure["code"] || response.code
+        )
+      rescue JSON::ParserError, IOError, SystemCallError, Timeout::Error => error
+        raise Error, "Market API request failed: #{error.message}"
+      end
+    end
+  end
+end
