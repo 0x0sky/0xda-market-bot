@@ -1,0 +1,55 @@
+# frozen_string_literal: true
+
+require "json"
+require "rack"
+
+module ZeroXDA
+  module MarketClientBot
+    class WebApp
+      JSON_HEADERS = {
+        "content-type" => "application/json; charset=utf-8",
+        "cache-control" => "no-store"
+      }.freeze
+
+      def initialize(bot:, webhook_secret:)
+        raise ArgumentError, "Webhook secret must not be empty" if webhook_secret.to_s.empty?
+
+        @bot = bot
+        @webhook_secret = webhook_secret
+      end
+
+      def call(environment)
+        request = Rack::Request.new(environment)
+        return json_response(200, status: "ok") if request.get? && request.path_info == "/health"
+
+        if request.post? && request.path_info == "/telegram/webhook"
+          return json_response(401, error: "unauthorized") unless authorized?(request)
+
+          @bot.handle(JSON.parse(request.body.read(1_048_577)))
+          return json_response(200, status: "accepted")
+        end
+
+        json_response(404, error: "not_found")
+      rescue JSON::ParserError
+        json_response(400, error: "invalid_json")
+      end
+
+      private
+
+      def authorized?(request)
+        provided = request.get_header("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN").to_s
+        secure_compare(provided, @webhook_secret)
+      end
+
+      def secure_compare(left, right)
+        return false if left.empty? || left.bytesize != right.bytesize
+
+        left.bytes.zip(right.bytes).reduce(0) { |result, (a, b)| result | (a ^ b) }.zero?
+      end
+
+      def json_response(status, document)
+        [status, JSON_HEADERS, [JSON.generate(document)]]
+      end
+    end
+  end
+end
