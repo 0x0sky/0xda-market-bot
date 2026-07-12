@@ -1,6 +1,6 @@
 # 0xda-market Client Bot
 
-Private Telegram client for `zeroxda-market`.
+Private Telegram client for `0xda-market`.
 
 Commands:
 
