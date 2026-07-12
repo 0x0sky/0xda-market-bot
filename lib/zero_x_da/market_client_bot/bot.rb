@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "set"
 require "time"
 require_relative "market_api"
 require_relative "telegram_api"
@@ -9,11 +8,19 @@ module ZeroXDA
   module MarketClientBot
     class Bot
       MESSAGE_LIMIT = 3_800
+      PUBLIC_COMMANDS = [
+        { command: "start", description: "авторизація" },
+        { command: "status", description: "стан сервісів" }
+      ].freeze
+      ADMIN_COMMANDS = [
+        *PUBLIC_COMMANDS,
+        { command: "users", description: "активні користувачі" },
+        { command: "setadmin", description: "призначити адміністратора" }
+      ].freeze
 
-      def initialize(market_api:, telegram_api:, admin_telegram_ids: [], clock: -> { Time.now.utc })
+      def initialize(market_api:, telegram_api:, clock: -> { Time.now.utc })
         @market_api = market_api
         @telegram_api = telegram_api
-        @admin_telegram_ids = admin_telegram_ids.map(&:to_s).reject(&:empty?).to_set
         @clock = clock
       end
 
@@ -21,13 +28,16 @@ module ZeroXDA
         message = update["message"]
         return unless message
 
-        case command(message["text"])
+        command, argument = parse_command(message["text"])
+        case command
         when "/start"
           authenticate(message)
         when "/status"
           show_status(message)
         when "/users"
           show_active_users(message)
+        when "/setadmin"
+          set_admin(message, argument)
         end
       rescue KeyError, ArgumentError, MarketAPI::Error => error
         notify_failure(message, error)
@@ -35,9 +45,9 @@ module ZeroXDA
 
       private
 
-      def command(text)
-        match = text.to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s|\z)})
-        match && match[1]
+      def parse_command(text)
+        match = text.to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s+(.+)|\z)})
+        [match&.[](1)&.downcase, match&.[](2)&.strip]
       end
 
       def authenticate(message)
@@ -46,7 +56,9 @@ module ZeroXDA
           user: message.fetch("from"),
           chat: chat
         )
-        send_message(chat.fetch("id"), success_message(user))
+        chat_id = chat.fetch("id")
+        send_message(chat_id, success_message(user))
+        sync_commands(chat_id, user)
       end
 
       def show_status(message)
@@ -67,15 +79,76 @@ module ZeroXDA
       end
 
       def show_active_users(message)
-        telegram_user_id = message.fetch("from").fetch("id").to_s
-        unless @admin_telegram_ids.include?(telegram_user_id)
-          return send_message(message.fetch("chat").fetch("id"), "доступ заборонено.")
-        end
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
 
         users = @market_api.active_users
         user_messages(users).each do |text|
-          send_message(message.fetch("chat").fetch("id"), text)
+          send_message(chat_id, text)
         end
+      end
+
+      def set_admin(message, target)
+        chat_id = message.fetch("chat").fetch("id")
+        actor = authenticate_user(message)
+        sync_commands(chat_id, actor)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(actor)
+        if target.to_s.empty?
+          return send_message(chat_id, "формат: /setadmin @username або Telegram ID")
+        end
+
+        assignment = @market_api.set_admin(
+          actor_telegram_user_id: message.fetch("from").fetch("id"),
+          target: target
+        )
+        attributes = assignment.fetch("attributes")
+        target_chat_id = attributes["telegram_chat_id"]
+        sync_admin_target(target_chat_id, chat_id)
+        text = <<~TEXT.strip
+          admin призначений ✅
+
+          telegram: #{attributes.fetch("telegram_user_id")}
+          uuid: #{assignment.fetch("id")}
+          role: #{attributes.fetch("role")}
+        TEXT
+        send_message(chat_id, text)
+      end
+
+      def authenticate_user(message)
+        @market_api.authenticate_telegram(
+          user: message.fetch("from"),
+          chat: message.fetch("chat")
+        )
+      end
+
+      def sync_commands(chat_id, user)
+        commands = admin?(user) ? ADMIN_COMMANDS : PUBLIC_COMMANDS
+        @telegram_api.set_commands(
+          commands,
+          scope: { type: "chat", chat_id: chat_id }
+        )
+      rescue TelegramAPI::Error => error
+        warn "command menu sync failed: #{error.message}"
+      end
+
+      def sync_admin_target(target_chat_id, actor_chat_id)
+        return if target_chat_id.to_s.empty?
+
+        @telegram_api.set_commands(
+          ADMIN_COMMANDS,
+          scope: { type: "chat", chat_id: target_chat_id }
+        )
+        return if target_chat_id.to_s == actor_chat_id.to_s
+
+        send_message(target_chat_id, "вам призначено роль admin ✅")
+      rescue TelegramAPI::Error => error
+        warn "new admin menu sync failed: #{error.message}"
+      end
+
+      def admin?(user)
+        user.dig("attributes", "role") == "admin"
       end
 
       def user_messages(users)
