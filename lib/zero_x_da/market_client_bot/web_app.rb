@@ -2,6 +2,7 @@
 
 require "json"
 require "rack"
+require "time"
 
 module ZeroXDA
   module MarketClientBot
@@ -20,7 +21,9 @@ module ZeroXDA
 
       def call(environment)
         request = Rack::Request.new(environment)
-        return json_response(200, status: "ok") if request.get? && request.path_info == "/health"
+        if request.get? && request.path_info == "/health"
+          return json_response(200, status: "ok", server_time: Time.now.utc.iso8601(6))
+        end
 
         if request.post? && request.path_info == "/telegram/webhook"
           return json_response(401, error: "unauthorized") unless authorized?(request)
