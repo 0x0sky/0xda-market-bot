@@ -14,5 +14,3 @@ services:
         value: https://zeroxda-market.onrender.com
       - key: MARKET_API_TOKEN
         sync: false
-      - key: PUBLIC_URL
-        sync: false
