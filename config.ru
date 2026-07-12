@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bundler/setup"
+require "rack/common_logger"
 require_relative "lib/zero_x_da/market_client_bot/bot"
 require_relative "lib/zero_x_da/market_client_bot/market_api"
 require_relative "lib/zero_x_da/market_client_bot/telegram_api"
@@ -17,6 +18,8 @@ bot = ZeroXDA::MarketClientBot::Bot.new(
   market_api: market_api,
   telegram_api: telegram_api
 )
+
+use Rack::CommonLogger, $stdout
 
 run ZeroXDA::MarketClientBot::WebApp.new(
   bot: bot,
