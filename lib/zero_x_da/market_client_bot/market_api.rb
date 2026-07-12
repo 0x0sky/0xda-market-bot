@@ -45,6 +45,14 @@ module ZeroXDA
         get("v1/users?status=active", authenticated: true).fetch("data")
       end
 
+      def set_admin(actor_telegram_user_id:, target:)
+        post(
+          "v1/admin/users/set-admin",
+          actor_telegram_user_id: actor_telegram_user_id,
+          target: target
+        ).fetch("data")
+      end
+
       private
 
       def get(path, authenticated:, allow_error_status: false)
