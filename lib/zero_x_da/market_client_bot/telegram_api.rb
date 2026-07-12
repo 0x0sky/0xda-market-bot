@@ -30,6 +30,10 @@ module ZeroXDA
         )
       end
 
+      def set_commands(commands)
+        post("setMyCommands", commands: commands)
+      end
+
       private
 
       def post(method, payload)
