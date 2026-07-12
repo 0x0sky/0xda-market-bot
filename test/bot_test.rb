@@ -59,9 +59,10 @@ class BotTest < Minitest::Test
 
     command_set = @telegram.command_sets.last
     assert_equal({ type: "chat", chat_id: 990 }, command_set.fetch(:scope))
-    assert_equal %w[start status users setadmin], command_set.fetch(:commands).map do |item|
+    commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
+    assert_equal %w[start status users setadmin], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
