@@ -16,8 +16,7 @@ market_api = ZeroXDA::MarketClientBot::MarketAPI.new(
 )
 bot = ZeroXDA::MarketClientBot::Bot.new(
   market_api: market_api,
-  telegram_api: telegram_api,
-  admin_telegram_ids: ENV.fetch("ADMIN_TELEGRAM_IDS", "").split(",").map(&:strip)
+  telegram_api: telegram_api
 )
 
 use Rack::CommonLogger, $stdout
