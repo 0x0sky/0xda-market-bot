@@ -8,7 +8,6 @@ class BotTest < Minitest::Test
     @bot = ZeroXDA::MarketClientBot::Bot.new(
       market_api: @market,
       telegram_api: @telegram,
-      admin_telegram_ids: [77],
       clock: -> { Time.utc(2026, 7, 12, 0, 0, 1) }
     )
   end
@@ -24,6 +23,9 @@ class BotTest < Minitest::Test
     assert_includes @telegram.messages.first.fetch(:text), "авторизація успішна"
     assert_includes @telegram.messages.first.fetch(:text), "role: client"
     assert_includes @telegram.messages.first.fetch(:text), "user: 12345678"
+    commands = @telegram.command_sets.first
+    assert_equal({ type: "chat", chat_id: 770 }, commands.fetch(:scope))
+    assert_equal %w[start status], commands.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_status_displays_both_services_and_server_times
@@ -37,7 +39,7 @@ class BotTest < Minitest::Test
   end
 
   def test_admin_can_list_active_users
-    @bot.handle(update("/users"))
+    @bot.handle(update("/users", user_id: 99, chat_id: 990))
 
     text = @telegram.messages.first.fetch(:text)
     assert_includes text, "active users: 1"
@@ -50,6 +52,37 @@ class BotTest < Minitest::Test
     @bot.handle(update("/users", user_id: 88))
 
     assert_equal "доступ заборонено.", @telegram.messages.first.fetch(:text)
+  end
+
+  def test_admin_menu_contains_only_admin_scoped_commands
+    @bot.handle(update("/start", user_id: 99, chat_id: 990))
+
+    command_set = @telegram.command_sets.last
+    assert_equal({ type: "chat", chat_id: 990 }, command_set.fetch(:scope))
+    assert_equal %w[start status users setadmin], command_set.fetch(:commands).map do |item|
+      item.fetch(:command)
+    end
+  end
+
+  def test_admin_promotes_a_user_and_installs_their_admin_menu
+    @bot.handle(update("/setadmin @target_user", user_id: 99, chat_id: 990))
+
+    request = @market.requests.last
+    assert_equal 99, request.fetch(:actor_telegram_user_id)
+    assert_equal "@target_user", request.fetch(:target)
+    command_set = @telegram.command_sets.last
+    assert_equal({ type: "chat", chat_id: "880" }, command_set.fetch(:scope))
+    assert_includes command_set.fetch(:commands).map { |item| item.fetch(:command) }, "setadmin"
+    assert_includes @telegram.messages.last.fetch(:text), "admin призначений"
+  end
+
+  def test_non_admin_cannot_execute_a_manually_typed_setadmin_command
+    @bot.handle(update("/setadmin 88", user_id: 77, chat_id: 770))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
+    command_set = @telegram.command_sets.last
+    assert_equal %w[start status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_ignores_unknown_messages
@@ -67,7 +100,7 @@ class BotTest < Minitest::Test
 
   private
 
-  def update(text, user_id: 77)
+  def update(text, user_id: 77, chat_id: 770)
     {
       "message" => {
         "text" => text,
@@ -77,7 +110,7 @@ class BotTest < Minitest::Test
           "first_name" => "Sasha",
           "language_code" => "uk"
         },
-        "chat" => { "id" => 770, "type" => "private" }
+        "chat" => { "id" => chat_id, "type" => "private" }
       }
     }
   end
