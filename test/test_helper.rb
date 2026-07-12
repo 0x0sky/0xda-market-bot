@@ -16,6 +16,23 @@ class FakeMarketAPI
       "attributes" => { "role" => "client", "status" => "active" }
     }
   end
+
+  def health
+    { "status" => "ok", "server_time" => "2026-07-12T00:00:00.000000Z" }
+  end
+
+  def active_users
+    [
+      {
+        "id" => "12345678-1234-4000-8000-123456789012",
+        "attributes" => {
+          "telegram_user_id" => "77",
+          "role" => "client",
+          "status" => "active"
+        }
+      }
+    ]
+  end
 end
 
 class FakeTelegramAPI
