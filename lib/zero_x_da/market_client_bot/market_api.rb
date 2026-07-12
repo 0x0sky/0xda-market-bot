@@ -37,7 +37,30 @@ module ZeroXDA
         document.fetch("data")
       end
 
+      def health
+        get("health", authenticated: false, allow_error_status: true)
+      end
+
+      def active_users
+        get("v1/users?status=active", authenticated: true).fetch("data")
+      end
+
+      def set_admin(actor_telegram_user_id:, target:)
+        post(
+          "v1/admin/users/set-admin",
+          actor_telegram_user_id: actor_telegram_user_id,
+          target: target
+        ).fetch("data")
+      end
+
       private
+
+      def get(path, authenticated:, allow_error_status: false)
+        uri = URI.join(@base_url, path)
+        request = Net::HTTP::Get.new(uri)
+        request["authorization"] = "Bearer #{@token}" if authenticated
+        perform(uri, request, allow_error_status: allow_error_status)
+      end
 
       def post(path, payload)
         uri = URI.join(@base_url, path)
@@ -45,6 +68,10 @@ module ZeroXDA
         request["authorization"] = "Bearer #{@token}"
         request["content-type"] = "application/json"
         request.body = JSON.generate(payload)
+        perform(uri, request)
+      end
+
+      def perform(uri, request, allow_error_status: false)
         response = Net::HTTP.start(
           uri.host,
           uri.port,
@@ -55,7 +82,7 @@ module ZeroXDA
           http.request(request)
         end
         document = JSON.parse(response.body)
-        return document if response.is_a?(Net::HTTPSuccess)
+        return document if response.is_a?(Net::HTTPSuccess) || allow_error_status
 
         failure = document.fetch("errors", [{}]).first
         raise Error.new(

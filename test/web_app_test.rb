@@ -26,11 +26,13 @@ class WebAppTest < Minitest::Test
     )
   end
 
-  def test_health_is_public
+  def test_health_is_public_and_includes_server_time
     response = @client.get("/health")
 
     assert_equal 200, response.status
-    assert_equal({ "status" => "ok" }, JSON.parse(response.body))
+    document = JSON.parse(response.body)
+    assert_equal "ok", document.fetch("status")
+    assert_match(/\A\d{4}-\d{2}-\d{2}T/, document.fetch("server_time"))
   end
 
   def test_rejects_a_webhook_without_the_telegram_secret

@@ -30,6 +30,12 @@ module ZeroXDA
         )
       end
 
+      def set_commands(commands, scope: nil)
+        payload = { commands: commands }
+        payload[:scope] = scope if scope
+        post("setMyCommands", payload)
+      end
+
       private
 
       def post(method, payload)
