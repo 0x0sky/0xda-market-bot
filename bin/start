@@ -4,6 +4,7 @@
 $stdout.sync = true
 
 require_relative "../lib/zero_x_da/market_client_bot/telegram_api"
+require_relative "../lib/zero_x_da/market_client_bot/bot"
 
 public_url = ENV.fetch("RENDER_EXTERNAL_URL") { ENV.fetch("PUBLIC_URL") }.delete_suffix("/")
 telegram = ZeroXDA::MarketClientBot::TelegramAPI.new(
@@ -15,11 +16,8 @@ telegram.set_webhook(
   secret_token: ENV.fetch("TELEGRAM_WEBHOOK_SECRET")
 )
 telegram.set_commands(
-  [
-    { command: "start", description: "авторизація" },
-    { command: "status", description: "стан сервісів" },
-    { command: "users", description: "активні користувачі" }
-  ]
+  ZeroXDA::MarketClientBot::Bot::PUBLIC_COMMANDS,
+  scope: { type: "default" }
 )
 puts "Telegram webhook configured: #{webhook_url}"
 
