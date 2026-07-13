@@ -3,10 +3,11 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "minitest/autorun"
 
 class FakeMarketAPI
-  attr_reader :requests
+  attr_reader :requests, :health_requests
 
   def initialize
     @requests = []
+    @health_requests = 0
   end
 
   def authenticate_telegram(user:, chat:)
@@ -19,6 +20,7 @@ class FakeMarketAPI
   end
 
   def health
+    @health_requests += 1
     { "status" => "ok", "server_time" => "2026-07-12T00:00:00.000000Z" }
   end
 

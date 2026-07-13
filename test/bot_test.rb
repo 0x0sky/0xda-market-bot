@@ -25,17 +25,25 @@ class BotTest < Minitest::Test
     assert_includes @telegram.messages.first.fetch(:text), "user: 12345678"
     commands = @telegram.command_sets.first
     assert_equal({ type: "chat", chat_id: 770 }, commands.fetch(:scope))
-    assert_equal %w[start status], commands.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[start], commands.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
-  def test_status_displays_both_services_and_server_times
-    @bot.handle(update("/status"))
+  def test_admin_status_displays_both_services_and_server_times
+    @bot.handle(update("/status", user_id: 99, chat_id: 990))
 
     text = @telegram.messages.first.fetch(:text)
     assert_includes text, "market core: ok ✅"
     assert_includes text, "core time: 2026-07-12T00:00:00.000000Z"
     assert_includes text, "client bot: ok ✅"
     assert_includes text, "bot time: 2026-07-12T00:00:01.000000Z"
+  end
+
+  def test_non_admin_cannot_see_or_execute_status
+    @bot.handle(update("/status"))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal 0, @market.health_requests
+    assert_equal %w[start], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_admin_can_list_active_users
@@ -83,7 +91,7 @@ class BotTest < Minitest::Test
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
     command_set = @telegram.command_sets.last
-    assert_equal %w[start status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[start], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_ignores_unknown_messages
@@ -94,7 +102,7 @@ class BotTest < Minitest::Test
   end
 
   def test_accepts_command_with_bot_username
-    @bot.handle(update("/status@zeroxda_market_client_bot"))
+    @bot.handle(update("/status@zeroxda_market_client_bot", user_id: 99, chat_id: 990))
 
     assert_includes @telegram.messages.first.fetch(:text), "market core: ok"
   end

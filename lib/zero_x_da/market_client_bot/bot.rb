@@ -9,11 +9,11 @@ module ZeroXDA
     class Bot
       MESSAGE_LIMIT = 3_800
       PUBLIC_COMMANDS = [
-        { command: "start", description: "авторизація" },
-        { command: "status", description: "стан сервісів" }
+        { command: "start", description: "авторизація" }
       ].freeze
       ADMIN_COMMANDS = [
         *PUBLIC_COMMANDS,
+        { command: "status", description: "стан серверів" },
         { command: "users", description: "активні користувачі" },
         { command: "setadmin", description: "призначити адміністратора" }
       ].freeze
@@ -62,6 +62,11 @@ module ZeroXDA
       end
 
       def show_status(message)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+
         health = @market_api.health
         core_status = health.fetch("status", "unknown")
         core_time = health.fetch("server_time", "—")
@@ -75,7 +80,7 @@ module ZeroXDA
           client bot: ok ✅
           bot time: #{bot_time}
         TEXT
-        send_message(message.fetch("chat").fetch("id"), text)
+        send_message(chat_id, text)
       end
 
       def show_active_users(message)
