@@ -9,11 +9,12 @@ module ZeroXDA
     class Bot
       MESSAGE_LIMIT = 3_800
       PUBLIC_COMMANDS = [
-        { command: "start", description: "авторизація" }
+        { command: "start", description: "авторизація" },
+        { command: "status", description: "власний статус" }
       ].freeze
       ADMIN_COMMANDS = [
         *PUBLIC_COMMANDS,
-        { command: "status", description: "стан серверів" },
+        { command: "servers", description: "стан серверів" },
         { command: "users", description: "активні користувачі" },
         { command: "setadmin", description: "призначити адміністратора" }
       ].freeze
@@ -34,6 +35,8 @@ module ZeroXDA
           authenticate(message)
         when "/status"
           show_status(message)
+        when "/servers"
+          show_servers(message)
         when "/users"
           show_active_users(message)
         when "/setadmin"
@@ -65,6 +68,13 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
+        send_message(chat_id, user_status_message(user))
+      end
+
+      def show_servers(message)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
         return send_message(chat_id, "доступ заборонено.") unless admin?(user)
 
         health = @market_api.health
@@ -72,7 +82,7 @@ module ZeroXDA
         core_time = health.fetch("server_time", "—")
         bot_time = timestamp(@clock.call)
         text = <<~TEXT.strip
-          zeroxda-market / status
+          zeroxda-market / servers
 
           market core: #{status_label(core_status)}
           core time: #{core_time}
@@ -184,6 +194,20 @@ module ZeroXDA
           авторизація успішна ✅
           role: #{role}
           user: #{id[0, 8]}
+        TEXT
+      end
+
+      def user_status_message(user)
+        id = user.fetch("id")
+        role = user.dig("attributes", "role")
+        status = user.dig("attributes", "status")
+        indicator = status == "active" ? "✅" : "❌"
+        <<~TEXT.strip
+          zeroxda-market / status
+
+          role: #{role}
+          user: #{id[0, 8]}
+          status: #{status} #{indicator}
         TEXT
       end
 

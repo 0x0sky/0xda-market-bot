@@ -25,11 +25,21 @@ class BotTest < Minitest::Test
     assert_includes @telegram.messages.first.fetch(:text), "user: 12345678"
     commands = @telegram.command_sets.first
     assert_equal({ type: "chat", chat_id: 770 }, commands.fetch(:scope))
-    assert_equal %w[start], commands.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[start status], commands.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
-  def test_admin_status_displays_both_services_and_server_times
-    @bot.handle(update("/status", user_id: 99, chat_id: 990))
+  def test_status_displays_the_current_user_state
+    @bot.handle(update("/status"))
+
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "role: client"
+    assert_includes text, "user: 12345678"
+    assert_includes text, "status: active ✅"
+    assert_equal 0, @market.health_requests
+  end
+
+  def test_admin_servers_displays_both_services_and_server_times
+    @bot.handle(update("/servers", user_id: 99, chat_id: 990))
 
     text = @telegram.messages.first.fetch(:text)
     assert_includes text, "market core: ok ✅"
@@ -38,12 +48,12 @@ class BotTest < Minitest::Test
     assert_includes text, "bot time: 2026-07-12T00:00:01.000000Z"
   end
 
-  def test_non_admin_cannot_see_or_execute_status
-    @bot.handle(update("/status"))
+  def test_non_admin_cannot_see_or_execute_servers
+    @bot.handle(update("/servers"))
 
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_equal 0, @market.health_requests
-    assert_equal %w[start], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[start status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_admin_can_list_active_users
@@ -70,7 +80,7 @@ class BotTest < Minitest::Test
     commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
-    assert_equal %w[start status users setadmin], commands
+    assert_equal %w[start status servers users setadmin], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
@@ -91,7 +101,7 @@ class BotTest < Minitest::Test
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
     command_set = @telegram.command_sets.last
-    assert_equal %w[start], command_set.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[start status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_ignores_unknown_messages
@@ -102,7 +112,7 @@ class BotTest < Minitest::Test
   end
 
   def test_accepts_command_with_bot_username
-    @bot.handle(update("/status@zeroxda_market_client_bot", user_id: 99, chat_id: 990))
+    @bot.handle(update("/servers@zeroxda_market_client_bot", user_id: 99, chat_id: 990))
 
     assert_includes @telegram.messages.first.fetch(:text), "market core: ok"
   end
