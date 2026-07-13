@@ -5,15 +5,16 @@ Private Telegram client for `0xda-market`.
 Commands:
 
 - `/start` — passwordless Telegram authentication;
-- `/status` — health and UTC server time for market core and client bot;
+- `/status` — current persisted role and account status;
+- `/servers` — health and UTC server time for market core and client bot (admin only);
 - `/users` — active Telegram users for administrators;
 - `/setadmin @username` or `/setadmin TELEGRAM_ID` — promote a registered user.
 
 `/users` shows only Telegram ID, internal UUID and role. The default Telegram
-command scope contains only `/start` and `/status`. After authentication, an
-admin receives a private chat scope that also contains `/users` and
-`/setadmin`; clients do not see either admin command. The core still verifies
-the persisted admin role for every assignment.
+command scope contains `/start` and `/status`. After authentication, an admin
+receives a private chat scope that also contains `/servers`, `/users` and
+`/setadmin`; clients do not see or execute these admin commands. The core still
+verifies the persisted admin role for every assignment.
 
 ## Environment
 
