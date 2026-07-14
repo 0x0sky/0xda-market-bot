@@ -8,7 +8,7 @@ module ZeroXDA
   module MarketClientBot
     class Bot
       MESSAGE_LIMIT = 3_800
-      SERVER_START_NOTICE = "сервер запускається…"
+      SERVER_START_NOTICE = "0xda-market запускається…"
       SERVER_START_NOTICE_DELAY = 3
       PUBLIC_COMMANDS = [
         { command: "start", description: "авторизація" },

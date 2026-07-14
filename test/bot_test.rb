@@ -132,7 +132,7 @@ class BotTest < Minitest::Test
 
     bot.handle(update("/start"))
 
-    assert_equal "сервер запускається…", @telegram.messages.first.fetch(:text)
+    assert_equal "0xda-market запускається…", @telegram.messages.first.fetch(:text)
     assert_includes @telegram.messages.last.fetch(:text), "авторизація успішна"
   end
 
