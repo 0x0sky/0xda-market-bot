@@ -38,6 +38,24 @@ class BotTest < Minitest::Test
     assert_equal 0, @market.health_requests
   end
 
+  def test_status_uses_the_client_context_for_a_broker_identity
+    market = Class.new(FakeMarketAPI) do
+      def authenticate_telegram(**arguments)
+        super.tap { |user| user.fetch("attributes")["role"] = "broker" }
+      end
+    end.new
+    bot = ZeroXDA::MarketClientBot::Bot.new(
+      market_api: market,
+      telegram_api: @telegram
+    )
+
+    bot.handle(update("/status"))
+
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "role: client"
+    refute_includes text, "role: broker"
+  end
+
   def test_admin_servers_displays_both_services_and_server_times
     @bot.handle(update("/servers", user_id: 99, chat_id: 990))
 
