@@ -8,7 +8,8 @@ class BotTest < Minitest::Test
     @bot = ZeroXDA::MarketClientBot::Bot.new(
       market_api: @market,
       telegram_api: @telegram,
-      clock: -> { Time.utc(2026, 7, 12, 0, 0, 1) }
+      clock: -> { Time.utc(2026, 7, 12, 0, 0, 1) },
+      status_message_ttl: 0
     )
   end
 
@@ -21,11 +22,15 @@ class BotTest < Minitest::Test
     assert_equal 770, request.dig(:chat, "id")
     assert_equal 770, @telegram.messages.first.fetch(:chat_id)
     assert_includes @telegram.messages.first.fetch(:text), "авторизація успішна"
-    assert_includes @telegram.messages.first.fetch(:text), "role: client"
-    assert_includes @telegram.messages.first.fetch(:text), "user: 12345678"
+    assert_equal <<~TEXT.strip, @telegram.messages.first.fetch(:text)
+      авторизація успішна ✅
+      role: client
+      status: active ✅
+    TEXT
     commands = @telegram.command_sets.first
     assert_equal({ type: "chat", chat_id: 770 }, commands.fetch(:scope))
-    assert_equal %w[start status], commands.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[status], commands.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal [{ chat_id: 770, message_id: 1 }], @telegram.deleted_messages
   end
 
   def test_status_displays_the_current_user_state
@@ -33,7 +38,6 @@ class BotTest < Minitest::Test
 
     text = @telegram.messages.last.fetch(:text)
     assert_includes text, "role: client"
-    assert_includes text, "user: 12345678"
     assert_includes text, "status: active ✅"
     assert_equal 0, @market.health_requests
   end
@@ -71,7 +75,7 @@ class BotTest < Minitest::Test
 
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_equal 0, @market.health_requests
-    assert_equal %w[start status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_admin_can_list_active_users
@@ -98,7 +102,7 @@ class BotTest < Minitest::Test
     commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
-    assert_equal %w[start status servers users setadmin], commands
+    assert_equal %w[status servers users setadmin], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
@@ -119,7 +123,7 @@ class BotTest < Minitest::Test
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
     command_set = @telegram.command_sets.last
-    assert_equal %w[start status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_ignores_unknown_messages

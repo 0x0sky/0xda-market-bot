@@ -10,12 +10,15 @@ module ZeroXDA
       MESSAGE_LIMIT = 3_800
       SERVER_START_NOTICE = "0xda-market запускається…"
       SERVER_START_NOTICE_DELAY = 3
-      PUBLIC_COMMANDS = [
-        { command: "start", description: "авторизація" },
+      STATUS_MESSAGE_TTL = 3
+      START_COMMANDS = [
+        { command: "start", description: "авторизація" }
+      ].freeze
+      CLIENT_COMMANDS = [
         { command: "status", description: "власний статус" }
       ].freeze
       ADMIN_COMMANDS = [
-        *PUBLIC_COMMANDS,
+        *CLIENT_COMMANDS,
         { command: "servers", description: "стан серверів" },
         { command: "users", description: "активні користувачі" },
         { command: "setadmin", description: "призначити адміністратора" }
@@ -25,12 +28,14 @@ module ZeroXDA
         market_api:,
         telegram_api:,
         clock: -> { Time.now.utc },
-        server_start_notice_delay: SERVER_START_NOTICE_DELAY
+        server_start_notice_delay: SERVER_START_NOTICE_DELAY,
+        status_message_ttl: STATUS_MESSAGE_TTL
       )
         @market_api = market_api
         @telegram_api = telegram_api
         @clock = clock
         @server_start_notice_delay = server_start_notice_delay
+        @status_message_ttl = status_message_ttl
       end
 
       def handle(update)
@@ -97,15 +102,15 @@ module ZeroXDA
           chat: chat
         )
         chat_id = chat.fetch("id")
-        send_message(chat_id, success_message(user))
         sync_commands(chat_id, user)
+        send_status_message(chat_id, user)
       end
 
       def show_status(message)
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        send_message(chat_id, user_status_message(user))
+        send_status_message(chat_id, user)
       end
 
       def show_servers(message)
@@ -176,7 +181,7 @@ module ZeroXDA
       end
 
       def sync_commands(chat_id, user)
-        commands = admin?(user) ? ADMIN_COMMANDS : PUBLIC_COMMANDS
+        commands = admin?(user) ? ADMIN_COMMANDS : CLIENT_COMMANDS
         @telegram_api.set_commands(
           commands,
           scope: { type: "chat", chat_id: chat_id }
@@ -222,30 +227,35 @@ module ZeroXDA
         messages
       end
 
-      def success_message(user)
-        id = user.fetch("id")
-        role = client_role(user)
-        <<~TEXT.strip
-          zeroxda-market
-
-          авторизація успішна ✅
-          role: #{role}
-          user: #{id[0, 8]}
-        TEXT
-      end
-
       def user_status_message(user)
-        id = user.fetch("id")
         role = client_role(user)
         status = user.dig("attributes", "status")
         indicator = status == "active" ? "✅" : "❌"
         <<~TEXT.strip
-          zeroxda-market / status
-
+          авторизація успішна ✅
           role: #{role}
-          user: #{id[0, 8]}
           status: #{status} #{indicator}
         TEXT
+      end
+
+      def send_status_message(chat_id, user)
+        message = send_message(chat_id, user_status_message(user))
+        schedule_message_deletion(chat_id, message)
+      end
+
+      def schedule_message_deletion(chat_id, message)
+        message_id = message&.fetch("message_id", nil)
+        return unless message_id
+
+        delete = -> { @telegram_api.delete_message(chat_id: chat_id, message_id: message_id) }
+        return delete.call if @status_message_ttl.zero?
+
+        Thread.new do
+          sleep @status_message_ttl
+          delete.call
+        rescue TelegramAPI::Error => error
+          warn "status message deletion failed: #{error.message}"
+        end.tap { |thread| thread.report_on_exception = false }
       end
 
       def status_label(status)
