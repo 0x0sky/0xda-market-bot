@@ -117,6 +117,25 @@ class BotTest < Minitest::Test
     assert_includes @telegram.messages.first.fetch(:text), "market core: ok"
   end
 
+  def test_reports_a_slow_market_start_and_sends_the_result_later
+    slow_market = Class.new(FakeMarketAPI) do
+      def authenticate_telegram(**arguments)
+        sleep 0.03
+        super
+      end
+    end.new
+    bot = ZeroXDA::MarketClientBot::Bot.new(
+      market_api: slow_market,
+      telegram_api: @telegram,
+      server_start_notice_delay: 0.005
+    )
+
+    bot.handle(update("/start"))
+
+    assert_equal "сервер запускається…", @telegram.messages.first.fetch(:text)
+    assert_includes @telegram.messages.last.fetch(:text), "авторизація успішна"
+  end
+
   private
 
   def update(text, user_id: 77, chat_id: 770)

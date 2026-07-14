@@ -6,17 +6,28 @@ require "time"
 
 module ZeroXDA
   module MarketClientBot
+    class AsyncDispatcher
+      def call(&task)
+        Thread.new do
+          task.call
+        rescue StandardError => error
+          warn "background update failed: #{error.class}: #{error.message}"
+        end.tap { |thread| thread.report_on_exception = false }
+      end
+    end
+
     class WebApp
       JSON_HEADERS = {
         "content-type" => "application/json; charset=utf-8",
         "cache-control" => "no-store"
       }.freeze
 
-      def initialize(bot:, webhook_secret:)
+      def initialize(bot:, webhook_secret:, dispatcher: AsyncDispatcher.new)
         raise ArgumentError, "Webhook secret must not be empty" if webhook_secret.to_s.empty?
 
         @bot = bot
         @webhook_secret = webhook_secret
+        @dispatcher = dispatcher
       end
 
       def call(environment)
@@ -28,7 +39,8 @@ module ZeroXDA
         if request.post? && request.path_info == "/telegram/webhook"
           return json_response(401, error: "unauthorized") unless authorized?(request)
 
-          @bot.handle(JSON.parse(request.body.read(1_048_577)))
+          update = JSON.parse(request.body.read(1_048_577))
+          @dispatcher.call { @bot.handle(update) }
           return json_response(200, status: "accepted")
         end
 

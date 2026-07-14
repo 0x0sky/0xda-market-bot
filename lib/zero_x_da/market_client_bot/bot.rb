@@ -8,6 +8,8 @@ module ZeroXDA
   module MarketClientBot
     class Bot
       MESSAGE_LIMIT = 3_800
+      SERVER_START_NOTICE = "сервер запускається…"
+      SERVER_START_NOTICE_DELAY = 3
       PUBLIC_COMMANDS = [
         { command: "start", description: "авторизація" },
         { command: "status", description: "власний статус" }
@@ -19,10 +21,16 @@ module ZeroXDA
         { command: "setadmin", description: "призначити адміністратора" }
       ].freeze
 
-      def initialize(market_api:, telegram_api:, clock: -> { Time.now.utc })
+      def initialize(
+        market_api:,
+        telegram_api:,
+        clock: -> { Time.now.utc },
+        server_start_notice_delay: SERVER_START_NOTICE_DELAY
+      )
         @market_api = market_api
         @telegram_api = telegram_api
         @clock = clock
+        @server_start_notice_delay = server_start_notice_delay
       end
 
       def handle(update)
@@ -30,23 +38,52 @@ module ZeroXDA
         return unless message
 
         command, argument = parse_command(message["text"])
-        case command
-        when "/start"
-          authenticate(message)
-        when "/status"
-          show_status(message)
-        when "/servers"
-          show_servers(message)
-        when "/users"
-          show_active_users(message)
-        when "/setadmin"
-          set_admin(message, argument)
+        if command
+          with_server_start_notice(message) do
+            case command
+            when "/start"
+              authenticate(message)
+            when "/status"
+              show_status(message)
+            when "/servers"
+              show_servers(message)
+            when "/users"
+              show_active_users(message)
+            when "/setadmin"
+              set_admin(message, argument)
+            end
+          end
         end
       rescue KeyError, ArgumentError, MarketAPI::Error => error
         notify_failure(message, error)
       end
 
       private
+
+      def with_server_start_notice(message)
+        return yield unless supported_command?(message["text"])
+
+        chat_id = message.fetch("chat").fetch("id")
+        completed = false
+        lock = Mutex.new
+        notifier = Thread.new do
+          sleep @server_start_notice_delay
+          send_message(chat_id, SERVER_START_NOTICE) unless lock.synchronize { completed }
+        rescue TelegramAPI::Error => error
+          warn "server start notice failed: #{error.message}"
+        end
+        notifier.report_on_exception = false
+        yield
+      ensure
+        if lock
+          lock.synchronize { completed = true }
+          notifier&.kill
+        end
+      end
+
+      def supported_command?(text)
+        %w[/start /status /servers /users /setadmin].include?(parse_command(text).first)
+      end
 
       def parse_command(text)
         match = text.to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s+(.+)|\z)})
