@@ -224,7 +224,7 @@ module ZeroXDA
 
       def success_message(user)
         id = user.fetch("id")
-        role = user.dig("attributes", "role")
+        role = client_role(user)
         <<~TEXT.strip
           zeroxda-market
 
@@ -236,7 +236,7 @@ module ZeroXDA
 
       def user_status_message(user)
         id = user.fetch("id")
-        role = user.dig("attributes", "role")
+        role = client_role(user)
         status = user.dig("attributes", "status")
         indicator = status == "active" ? "✅" : "❌"
         <<~TEXT.strip
@@ -250,6 +250,10 @@ module ZeroXDA
 
       def status_label(status)
         status == "ok" ? "ok ✅" : "#{status} ❌"
+      end
+
+      def client_role(user)
+        admin?(user) ? "admin" : "client"
       end
 
       def timestamp(value)
