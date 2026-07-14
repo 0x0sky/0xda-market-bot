@@ -11,10 +11,14 @@ module ZeroXDA
       SERVER_START_NOTICE = "0xda-market запускається…"
       SERVER_START_NOTICE_DELAY = 3
       STATUS_MESSAGE_TTL = 3
+      CATALOG_PAGE_SIZE = 9
+      CATALOG_COLUMNS = 3
+      BUY_CALLBACK_PATTERN = /\Abuy_([a-z0-9][a-z0-9_-]{0,59})\z/
       START_COMMANDS = [
         { command: "start", description: "авторизація" }
       ].freeze
       CLIENT_COMMANDS = [
+        { command: "buy", description: "купити" },
         { command: "status", description: "власний статус" }
       ].freeze
       ADMIN_COMMANDS = [
@@ -40,6 +44,8 @@ module ZeroXDA
 
       def handle(update)
         message = update["message"]
+        callback = update["callback_query"]
+        return handle_callback(callback) if callback
         return unless message
 
         command, argument = parse_command(message["text"])
@@ -50,6 +56,8 @@ module ZeroXDA
               authenticate(message)
             when "/status"
               show_status(message)
+            when "/buy"
+              show_products(message)
             when "/servers"
               show_servers(message)
             when "/users"
@@ -60,7 +68,7 @@ module ZeroXDA
           end
         end
       rescue KeyError, ArgumentError, MarketAPI::Error => error
-        notify_failure(message, error)
+        notify_failure(message || callback&.fetch("message", nil), error)
       end
 
       private
@@ -87,7 +95,7 @@ module ZeroXDA
       end
 
       def supported_command?(text)
-        %w[/start /status /servers /users /setadmin].include?(parse_command(text).first)
+        %w[/start /status /buy /servers /users /setadmin].include?(parse_command(text).first)
       end
 
       def parse_command(text)
@@ -111,6 +119,48 @@ module ZeroXDA
         user = authenticate_user(message)
         sync_commands(chat_id, user)
         send_status_message(chat_id, user)
+      end
+
+      def show_products(message)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        products = @market_api.products
+        send_message(
+          chat_id,
+          "обери продукт для купівлі:",
+          reply_markup: catalog_keyboard(products, callback_prefix: "buy")
+        )
+      end
+
+      def handle_callback(callback)
+        match = BUY_CALLBACK_PATTERN.match(callback.fetch("data").to_s)
+        return unless match
+
+        message = callback.fetch("message")
+        chat_id = message.fetch("chat").fetch("id")
+        user = @market_api.authenticate_telegram(
+          user: callback.fetch("from"),
+          chat: message.fetch("chat")
+        )
+        sync_commands(chat_id, user)
+        product = @market_api.products.find { |entry| entry.fetch("id") == match[1] }
+        raise ArgumentError, "product is unavailable" unless product
+
+        @telegram_api.answer_callback_query(
+          callback_query_id: callback.fetch("id"),
+          text: "обрано: #{product.dig("attributes", "name")}"
+        )
+      end
+
+      def catalog_keyboard(products, callback_prefix:)
+        buttons = products.first(CATALOG_PAGE_SIZE).map do |product|
+          {
+            text: product.dig("attributes", "button_label") || product.dig("attributes", "name"),
+            callback_data: "#{callback_prefix}_#{product.fetch("id")}"
+          }
+        end
+        { inline_keyboard: buttons.each_slice(CATALOG_COLUMNS).to_a }
       end
 
       def show_servers(message)
@@ -272,8 +322,12 @@ module ZeroXDA
         value.utc.iso8601(6)
       end
 
-      def send_message(chat_id, text)
-        @telegram_api.send_message(chat_id: chat_id, text: text)
+      def send_message(chat_id, text, reply_markup: nil)
+        @telegram_api.send_message(
+          chat_id: chat_id,
+          text: text,
+          reply_markup: reply_markup
+        )
       end
 
       def notify_failure(message, error)

@@ -29,7 +29,7 @@ class BotTest < Minitest::Test
     TEXT
     commands = @telegram.command_sets.first
     assert_equal({ type: "chat", chat_id: 770 }, commands.fetch(:scope))
-    assert_equal %w[status], commands.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[buy status], commands.fetch(:commands).map { |item| item.fetch(:command) }
     assert_equal [{ chat_id: 770, message_id: 1 }], @telegram.deleted_messages
   end
 
@@ -40,6 +40,33 @@ class BotTest < Minitest::Test
     assert_includes text, "role: client"
     assert_includes text, "status: active ✅"
     assert_equal 0, @market.health_requests
+  end
+
+  def test_authorized_client_can_open_the_nine_product_buy_catalog
+    @bot.handle(update("/buy"))
+
+    message = @telegram.messages.last
+    assert_equal "обери продукт для купівлі:", message.fetch(:text)
+    rows = message.dig(:reply_markup, :inline_keyboard)
+    assert_equal [3, 3, 3], rows.map(&:length)
+    buttons = rows.flatten
+    assert_equal "buy_premium_3m", buttons.first.fetch(:callback_data)
+    assert_equal "buy_eth", buttons.last.fetch(:callback_data)
+    assert_equal 1, @market.product_requests
+  end
+
+  def test_buy_callback_reauthenticates_the_client_and_acknowledges_selection
+    @bot.handle(callback("buy_stars_1000"))
+
+    assert_equal 1, @market.requests.length
+    assert_equal 1, @market.product_requests
+    assert_equal(
+      {
+        callback_query_id: "callback-1",
+        text: "обрано: Stars 1000"
+      },
+      @telegram.answered_callbacks.last
+    )
   end
 
   def test_status_uses_the_client_context_for_a_broker_identity
@@ -75,7 +102,7 @@ class BotTest < Minitest::Test
 
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_equal 0, @market.health_requests
-    assert_equal %w[status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[buy status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_admin_can_list_active_users
@@ -102,7 +129,7 @@ class BotTest < Minitest::Test
     commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
-    assert_equal %w[status servers users setadmin], commands
+    assert_equal %w[buy status servers users setadmin], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
@@ -123,7 +150,7 @@ class BotTest < Minitest::Test
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
     command_set = @telegram.command_sets.last
-    assert_equal %w[status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[buy status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
   def test_ignores_unknown_messages
@@ -171,6 +198,24 @@ class BotTest < Minitest::Test
           "language_code" => "uk"
         },
         "chat" => { "id" => chat_id, "type" => "private" }
+      }
+    }
+  end
+
+  def callback(data, user_id: 77, chat_id: 770)
+    {
+      "callback_query" => {
+        "id" => "callback-1",
+        "data" => data,
+        "from" => {
+          "id" => user_id,
+          "username" => "zero",
+          "first_name" => "Sasha",
+          "language_code" => "uk"
+        },
+        "message" => {
+          "chat" => { "id" => chat_id, "type" => "private" }
+        }
       }
     }
   end
