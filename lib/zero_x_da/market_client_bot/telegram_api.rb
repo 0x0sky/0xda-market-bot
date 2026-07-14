@@ -16,8 +16,16 @@ module ZeroXDA
         @base_url = URI("https://api.telegram.org/bot#{token}/")
       end
 
-      def send_message(chat_id:, text:)
-        post("sendMessage", chat_id: chat_id, text: text)
+      def send_message(chat_id:, text:, reply_markup: nil)
+        payload = { chat_id: chat_id, text: text }
+        payload[:reply_markup] = reply_markup if reply_markup
+        post("sendMessage", payload)
+      end
+
+      def answer_callback_query(callback_query_id:, text: nil)
+        payload = { callback_query_id: callback_query_id }
+        payload[:text] = text if text
+        post("answerCallbackQuery", payload)
       end
 
       def delete_message(chat_id:, message_id:)
@@ -29,7 +37,7 @@ module ZeroXDA
           "setWebhook",
           url: url,
           secret_token: secret_token,
-          allowed_updates: ["message"],
+          allowed_updates: %w[message callback_query],
           drop_pending_updates: false
         )
       end

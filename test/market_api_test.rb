@@ -33,6 +33,14 @@ class MarketAPITest < Minitest::Test
     assert_equal [2], api.backoffs
   end
 
+  def test_loads_products_from_the_authenticated_catalog_endpoint
+    payload = '{"data":[{"id":"ton","attributes":{"name":"TON"}}]}'
+    api = api_with(response("200", payload))
+
+    assert_equal "ton", api.products.first.fetch("id")
+    assert_equal 1, api.attempts
+  end
+
   def test_retries_gateway_errors
     %w[502 503 504].each do |status|
       api = api_with(response(status, "<html>starting</html>"), json_response)
