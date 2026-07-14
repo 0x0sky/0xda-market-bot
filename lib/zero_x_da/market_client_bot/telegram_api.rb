@@ -20,6 +20,10 @@ module ZeroXDA
         post("sendMessage", chat_id: chat_id, text: text)
       end
 
+      def delete_message(chat_id:, message_id:)
+        post("deleteMessage", chat_id: chat_id, message_id: message_id)
+      end
+
       def set_webhook(url:, secret_token:)
         post(
           "setWebhook",

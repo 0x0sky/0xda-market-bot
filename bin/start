@@ -16,7 +16,7 @@ telegram.set_webhook(
   secret_token: ENV.fetch("TELEGRAM_WEBHOOK_SECRET")
 )
 telegram.set_commands(
-  ZeroXDA::MarketClientBot::Bot::PUBLIC_COMMANDS,
+  ZeroXDA::MarketClientBot::Bot::START_COMMANDS,
   scope: { type: "default" }
 )
 puts "Telegram webhook configured: #{webhook_url}"

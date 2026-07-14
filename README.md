@@ -5,7 +5,8 @@ Private Telegram client for `0xda-market`.
 Commands:
 
 - `/start` — passwordless Telegram authentication;
-- `/status` — current persisted role and account status;
+- `/status` — current persisted role and account status; the response is removed
+  after three seconds;
 - `/servers` — health and UTC server time for market core and client bot (admin only);
 - `/users` — active Telegram users for administrators;
 - `/setadmin @username` or `/setadmin TELEGRAM_ID` — promote a registered user.
