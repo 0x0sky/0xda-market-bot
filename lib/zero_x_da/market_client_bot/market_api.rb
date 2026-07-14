@@ -10,8 +10,12 @@ module ZeroXDA
     class MarketAPI
       OPEN_TIMEOUT = 10
       READ_TIMEOUT = 75
-      MAX_REQUEST_ATTEMPTS = 2
+      MAX_REQUEST_ATTEMPTS = 6
+      RETRYABLE_STATUS_CODES = %w[502 503 504].freeze
+      RETRY_BACKOFF_SECONDS = [2, 4, 8, 16, 30].freeze
       TRANSIENT_ERRORS = [IOError, SystemCallError, Timeout::Error].freeze
+
+      class RetryableResponseError < StandardError; end
 
       class Error < StandardError
         attr_reader :code
@@ -22,11 +26,12 @@ module ZeroXDA
         end
       end
 
-      def initialize(base_url:, token:)
+      def initialize(base_url:, token:, sleeper: Kernel.method(:sleep))
         raise ArgumentError, "Market API token must not be empty" if token.to_s.empty?
 
         @base_url = URI("#{base_url.delete_suffix("/")}/")
         @token = token
+        @sleeper = sleeper
       end
 
       def authenticate_telegram(user:, chat:)
@@ -77,8 +82,7 @@ module ZeroXDA
       end
 
       def perform(uri, request, allow_error_status: false)
-        response = request_with_retry(uri, request)
-        document = JSON.parse(response.body)
+        response, document = request_with_retry(uri, request)
         return document if response.is_a?(Net::HTTPSuccess) || allow_error_status
 
         failure = document.fetch("errors", [{}]).first
@@ -86,7 +90,7 @@ module ZeroXDA
           failure["message"] || "Market API request failed",
           code: failure["code"] || response.code
         )
-      rescue JSON::ParserError, IOError, SystemCallError, Timeout::Error => error
+      rescue RetryableResponseError, JSON::ParserError, IOError, SystemCallError, Timeout::Error => error
         raise Error, "Market API request failed: #{error.message}"
       end
 
@@ -95,12 +99,29 @@ module ZeroXDA
 
         begin
           attempts += 1
-          perform_http_request(uri, request)
-        rescue *TRANSIENT_ERRORS
-          retry if attempts < MAX_REQUEST_ATTEMPTS
+          response = perform_http_request(uri, request)
+          raise RetryableResponseError, "temporary HTTP #{response.code}" if retryable_status?(response)
+
+          document = parse_document(response)
+          [response, document]
+        rescue *TRANSIENT_ERRORS, RetryableResponseError, JSON::ParserError
+          if attempts < MAX_REQUEST_ATTEMPTS
+            @sleeper.call(RETRY_BACKOFF_SECONDS.fetch(attempts - 1))
+            retry
+          end
 
           raise
         end
+      end
+
+      def retryable_status?(response)
+        RETRYABLE_STATUS_CODES.include?(response.code)
+      end
+
+      def parse_document(response)
+        JSON.parse(response.body)
+      rescue JSON::ParserError => error
+        raise JSON::ParserError, "temporary non-JSON response (HTTP #{response.code}): #{error.message}"
       end
 
       def perform_http_request(uri, request)
