@@ -3,6 +3,7 @@
 require "time"
 require_relative "market_api"
 require_relative "telegram_api"
+require_relative "price_messages"
 
 module ZeroXDA
   module MarketClientBot
@@ -14,6 +15,7 @@ module ZeroXDA
       CATALOG_PAGE_SIZE = 9
       CATALOG_COLUMNS = 3
       BUY_CALLBACK_PATTERN = /\Abuy_([a-z0-9][a-z0-9_-]{0,59})\z/
+      PRICE_AMOUNT_PATTERN = /\A\d+(?:\.\d{1,6})?\z/
       START_COMMANDS = [
         { command: "start", description: "авторизація" }
       ].freeze
@@ -25,7 +27,12 @@ module ZeroXDA
         *CLIENT_COMMANDS,
         { command: "servers", description: "стан серверів" },
         { command: "users", description: "активні користувачі" },
-        { command: "setadmin", description: "призначити адміністратора" }
+        { command: "setadmin", description: "призначити адміністратора" },
+        { command: "apply_prices", description: "price application form" },
+        { command: "apply_price", description: "set product price (USDT)" }
+      ].freeze
+      SUPPORTED_COMMANDS = %w[
+        /start /status /buy /servers /users /setadmin /apply_prices /apply_price
       ].freeze
 
       def initialize(
@@ -64,6 +71,10 @@ module ZeroXDA
               show_active_users(message)
             when "/setadmin"
               set_admin(message, argument)
+            when "/apply_prices"
+              start_price_application(message)
+            when "/apply_price"
+              apply_single_price(message, argument)
             end
           end
         end
@@ -95,7 +106,7 @@ module ZeroXDA
       end
 
       def supported_command?(text)
-        %w[/start /status /buy /servers /users /setadmin].include?(parse_command(text).first)
+        SUPPORTED_COMMANDS.include?(parse_command(text).first)
       end
 
       def parse_command(text)
@@ -221,6 +232,84 @@ module ZeroXDA
           role: #{attributes.fetch("role")}
         TEXT
         send_message(chat_id, text)
+      end
+
+      # /apply_prices — a new application over all prices. Sends the form:
+      # yesterday's and current amounts per product plus instructions. Until a
+      # new application is submitted, the last applied prices remain in effect.
+      def start_price_application(message)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+
+        proposal = @market_api.price_proposal(
+          actor_telegram_user_id: message.fetch("from").fetch("id")
+        )
+        send_message(chat_id, PriceMessages.application_text(proposal))
+      end
+
+      # /apply_price <sku|position|short name> <amount in USDT>
+      def apply_single_price(message, argument)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+
+        reference, amount = argument.to_s.split(/\s+/, 2)
+        amount = amount&.strip
+        unless reference && amount&.match?(PRICE_AMOUNT_PATTERN)
+          return send_message(chat_id, PriceMessages::APPLY_PRICE_USAGE)
+        end
+
+        product = resolve_product(reference)
+        unless product
+          return send_message(
+            chat_id,
+            "product not found: #{reference}\nuse a sku or position from /apply_prices"
+          )
+        end
+
+        applied = @market_api.apply_prices(
+          actor_telegram_user_id: message.fetch("from").fetch("id"),
+          prices: [{ sku: product.fetch("id"), amount_usdt: amount }]
+        )
+        price = applied.first
+        send_message(
+          chat_id,
+          "price applied ✅\n" \
+          "#{product.dig("attributes", "name")} (#{product.fetch("id")})\n" \
+          "#{price.dig("attributes", "amount_usdt")} USDT"
+        )
+      end
+
+      def resolve_product(reference)
+        products = @market_api.products
+        normalized = reference.to_s.downcase.strip
+        products.find { |product| product.fetch("id") == normalized } ||
+          products.find { |product| product.dig("attributes", "position").to_s == normalized } ||
+          fuzzy_product_match(products, normalized)
+      end
+
+      # Best-effort short-name matching: every token of the reference must
+      # prefix a word of the product's sku, name, or button label. Ambiguous
+      # references resolve to nothing rather than to a wrong product.
+      def fuzzy_product_match(products, reference)
+        tokens = reference.split(/[^a-z0-9]+/).reject(&:empty?)
+        return nil if tokens.empty?
+
+        matches = products.select do |product|
+          haystack = [
+            product.fetch("id"),
+            product.dig("attributes", "name"),
+            product.dig("attributes", "button_label")
+          ].compact.join(" ").downcase
+          words = haystack.split(/[^[:alnum:]]+/).reject(&:empty?)
+          tokens.all? do |token|
+            haystack.include?(token) || words.any? { |word| word.start_with?(token) }
+          end
+        end
+        matches.length == 1 ? matches.first : nil
       end
 
       def authenticate_user(message)
