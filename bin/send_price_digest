@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Sends the daily price application to every active admin.
+# Cron schedule: "0 5,6 * * *" UTC. The digest is due at 07:00 Central
+# European Time, so exactly one of the two runs delivers it (05:00 UTC in
+# summer / CEST, 06:00 UTC in winter / CET). FORCE_PRICE_DIGEST=1 bypasses
+# the time guard for manual runs.
+
+require "bundler/setup"
+require_relative "../lib/zero_x_da/market_client_bot/price_digest"
+
+digest = ZeroXDA::MarketClientBot::PriceDigest.new(
+  market_api: ZeroXDA::MarketClientBot::MarketAPI.new(
+    base_url: ENV.fetch("MARKET_API_URL", "https://zeroxda-market.onrender.com"),
+    token: ENV.fetch("MARKET_API_TOKEN")
+  ),
+  telegram_api: ZeroXDA::MarketClientBot::TelegramAPI.new(
+    token: ENV.fetch("TELEGRAM_BOT_TOKEN")
+  )
+)
+
+if ENV["FORCE_PRICE_DIGEST"] == "1" || digest.due?
+  count = digest.deliver
+  puts "price digest delivered to #{count} admin(s)"
+else
+  puts "price digest skipped: not 07:00 CET"
+end

@@ -14,3 +14,20 @@ services:
         value: https://zeroxda-market.onrender.com
       - key: MARKET_API_TOKEN
         sync: false
+  # Daily price digest to admins at 07:00 Central European Time.
+  # Runs at 05:00 and 06:00 UTC; the script itself delivers only on the run
+  # that matches 07:00 CET/CEST, so DST is handled without editing the cron.
+  - type: cron
+    name: 0xda-market-price-digest
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    schedule: "0 5,6 * * *"
+    dockerCommand: ruby bin/send_price_digest
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: MARKET_API_URL
+        value: https://zeroxda-market.onrender.com
+      - key: MARKET_API_TOKEN
+        sync: false
