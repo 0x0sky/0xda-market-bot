@@ -153,6 +153,67 @@ class BotTest < Minitest::Test
     assert_equal %w[buy status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
   end
 
+  def test_admin_receives_the_price_application_form
+    @bot.handle(update("/apply_prices", user_id: 99, chat_id: 990))
+
+    assert_equal [99], @market.price_proposal_requests
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "0xda-market / price application"
+    assert_includes text, "base currency: USDT"
+    assert_includes text, "1. Telegram Premium 3 міс. (premium_3m)"
+    assert_includes text, "yesterday: 7.20 · current: 7.45"
+    assert_includes text, "/apply_price <sku|position> <amount in USDT>"
+  end
+
+  def test_non_admin_cannot_request_the_price_application_form
+    @bot.handle(update("/apply_prices"))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_empty @market.price_proposal_requests
+  end
+
+  def test_admin_applies_a_single_price_by_sku
+    @bot.handle(update("/apply_price premium_6m 7.45", user_id: 99, chat_id: 990))
+
+    assert_equal(
+      [{ actor_telegram_user_id: 99, prices: [{ sku: "premium_6m", amount_usdt: "7.45" }] }],
+      @market.applied_prices
+    )
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "price applied ✅"
+    assert_includes text, "Telegram Premium 6 міс. (premium_6m)"
+    assert_includes text, "7.45 USDT"
+  end
+
+  def test_admin_applies_a_single_price_by_catalog_position
+    @bot.handle(update("/apply_price 5 3.10", user_id: 99, chat_id: 990))
+
+    price = @market.applied_prices.last.fetch(:prices).first
+    assert_equal "stars_1000", price.fetch(:sku)
+    assert_equal "3.10", price.fetch(:amount_usdt)
+  end
+
+  def test_apply_price_rejects_a_malformed_amount
+    @bot.handle(update("/apply_price premium_6m abc", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "format: /apply_price"
+    assert_empty @market.applied_prices
+  end
+
+  def test_apply_price_rejects_an_ambiguous_short_name
+    @bot.handle(update("/apply_price premium 7.45", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "product not found: premium"
+    assert_empty @market.applied_prices
+  end
+
+  def test_non_admin_cannot_apply_a_price
+    @bot.handle(update("/apply_price premium_6m 7.45"))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_empty @market.applied_prices
+  end
+
   def test_ignores_unknown_messages
     @bot.handle(update("100 stars"))
 
