@@ -129,7 +129,7 @@ class BotTest < Minitest::Test
     commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
-    assert_equal %w[buy status servers users setadmin], commands
+    assert_equal %w[buy status servers users setadmin apply_prices apply_price], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
