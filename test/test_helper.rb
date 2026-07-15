@@ -3,7 +3,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "minitest/autorun"
 
 class FakeMarketAPI
-  attr_reader :requests, :health_requests, :product_requests
+  attr_reader :requests, :health_requests, :product_requests, :price_proposal_requests, :applied_prices
 
   PRODUCTS = [
     ["premium_3m", "Telegram Premium 3 міс.", "Premium 3 міс."],
@@ -32,6 +32,8 @@ class FakeMarketAPI
     @requests = []
     @health_requests = 0
     @product_requests = 0
+    @price_proposal_requests = []
+    @applied_prices = []
   end
 
   def authenticate_telegram(user:, chat:)
@@ -64,6 +66,33 @@ class FakeMarketAPI
   def products
     @product_requests += 1
     PRODUCTS
+  end
+
+  def price_proposal(actor_telegram_user_id:)
+    @price_proposal_requests << actor_telegram_user_id
+    PRODUCTS.first(2).map do |product|
+      {
+        "type" => "price",
+        "id" => product.fetch("id"),
+        "attributes" => {
+          "name" => product.dig("attributes", "name"),
+          "position" => product.dig("attributes", "position"),
+          "previous_amount_usdt" => "7.20",
+          "current_amount_usdt" => "7.45"
+        }
+      }
+    end
+  end
+
+  def apply_prices(actor_telegram_user_id:, prices:)
+    @applied_prices << { actor_telegram_user_id: actor_telegram_user_id, prices: prices }
+    prices.map do |price|
+      {
+        "type" => "price",
+        "id" => price.fetch(:sku),
+        "attributes" => { "amount_usdt" => price.fetch(:amount_usdt) }
+      }
+    end
   end
 
   def set_admin(actor_telegram_user_id:, target:)
