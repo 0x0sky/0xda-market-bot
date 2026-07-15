@@ -59,6 +59,21 @@ module ZeroXDA
         get("v1/products", authenticated: true).fetch("data")
       end
 
+      def price_proposal(actor_telegram_user_id:)
+        get(
+          "v1/admin/prices/proposal?actor_telegram_user_id=#{actor_telegram_user_id}",
+          authenticated: true
+        ).fetch("data")
+      end
+
+      def apply_prices(actor_telegram_user_id:, prices:)
+        post(
+          "v1/admin/prices",
+          actor_telegram_user_id: actor_telegram_user_id,
+          prices: prices
+        ).fetch("data")
+      end
+
       def set_admin(actor_telegram_user_id:, target:)
         post(
           "v1/admin/users/set-admin",
