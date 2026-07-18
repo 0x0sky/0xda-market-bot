@@ -24,12 +24,34 @@ nine products as a 3×3 inline keyboard. Product callbacks use the stable
 `buy_<sku>` contract. The bot never hardcodes catalog rows and never connects to
 PostgreSQL directly.
 
-## Environment
+## Environments
 
-- `TELEGRAM_BOT_TOKEN` — token for `@zeroxda_market_client_bot`
+Two Telegram bots and two Render services map one-to-one onto the two
+market cores. Environment variables on a bot service are static: a service
+never switches environments, only code moves between branches.
+
+| | test | production |
+| --- | --- | --- |
+| Git branch | `master` | `release` |
+| Telegram bot | test bot (separate BotFather token) | `@zeroxda_market_client_bot` |
+| `MARKET_API_URL` | `market_test` service URL | `market` service URL |
+| `MARKET_API_TOKEN` | `PUBLIC_API_TOKEN` of `market_test` | `PUBLIC_API_TOKEN` of `market` |
+| Supabase | `0xda-market-test` (via core) | `0xda-market` (via core) |
+
+Code reaches production only through the "Promote to production" GitHub
+workflow, which fast-forwards `release` to `master`. Render deploys each
+service from its branch; enable "Auto-Deploy: After CI Checks Pass" on both
+services so a red build never ships.
+
+## Environment variables
+
+- `TELEGRAM_BOT_TOKEN` — token of this environment's Telegram bot
 - `TELEGRAM_WEBHOOK_SECRET` — generated random webhook secret
-- `MARKET_API_URL` — defaults to `https://zeroxda-market.onrender.com`
-- `MARKET_API_TOKEN` — the backend `PUBLIC_API_TOKEN`
+- `MARKET_API_URL` — this environment's market core URL; defaults to
+  `https://zeroxda-market.onrender.com` (production core) when unset, so the
+  test service must set it explicitly
+- `MARKET_API_TOKEN` — the `PUBLIC_API_TOKEN` of the same market core that
+  `MARKET_API_URL` points to
 - `RENDER_EXTERNAL_URL` — canonical service URL supplied automatically by Render
 
 Secrets must be configured in Render and must not be committed. Outside Render,
