@@ -15,4 +15,4 @@ jobs:
           ruby-version: 3.3.11
       - run: bundle install
       - run: bundle exec rake
-      - run: docker build --tag 0xda-market-client-bot .
+      - run: docker build --tag 0xda-market-bot .
