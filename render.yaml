@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: 0xda-market-client-bot
+    name: 0xda-market-bot
     runtime: docker
     plan: free
     region: frankfurt
@@ -9,11 +9,32 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
-        generateValue: true
+        sync: false
       - key: MARKET_API_URL
         value: https://zeroxda-market.onrender.com
       - key: MARKET_API_TOKEN
         sync: false
+      - key: PUBLIC_URL
+        value: https://zeroxda-market-bot.onrender.com
+
+  - type: web
+    name: 0xda-market-test-bot
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: MARKET_API_URL
+        value: https://zeroxda-market-test.onrender.com
+      - key: MARKET_API_TOKEN
+        sync: false
+      - key: PUBLIC_URL
+        value: https://zeroxda-market-test-bot.onrender.com
+
   # Daily price digest to admins at 07:00 Central European Time.
   # Runs at 05:00 and 06:00 UTC; the script itself delivers only on the run
   # that matches 07:00 CET/CEST, so DST is handled without editing the cron.
