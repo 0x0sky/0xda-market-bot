@@ -32,12 +32,16 @@ module ZeroXDA
           telegram_user_id = admin.dig("attributes", "telegram_user_id")
           begin
             proposal = @market_api.price_proposal(
-              actor_telegram_user_id: telegram_user_id
+              actor_telegram_user_id: telegram_user_id,
+              locale: admin.dig("attributes", "locale") || "en_US"
             )
             # In private chats the chat id equals the telegram user id.
             @telegram_api.send_message(
               chat_id: telegram_user_id,
-              text: PriceMessages.application_text(proposal),
+              text: PriceMessages.application_text(
+                proposal,
+                locale: admin.dig("attributes", "locale") || "en_US"
+              ),
               reply_markup: nil
             )
             delivered += 1

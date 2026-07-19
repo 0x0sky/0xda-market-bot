@@ -5,19 +5,21 @@ require "zero_x_da/market_client_bot/market_api"
 
 class MarketAPITest < Minitest::Test
   class StubbedMarketAPI < ZeroXDA::MarketClientBot::MarketAPI
-    attr_reader :attempts, :backoffs
+    attr_reader :attempts, :backoffs, :uris
 
     def initialize(outcomes:, **options)
       @outcomes = outcomes
       @attempts = 0
       @backoffs = []
+      @uris = []
       super(**options, sleeper: ->(seconds) { @backoffs << seconds })
     end
 
     private
 
-    def perform_http_request(_uri, _request)
+    def perform_http_request(uri, _request)
       @attempts += 1
+      @uris << uri
       outcome = @outcomes.fetch(@attempts - 1)
       raise outcome if outcome.is_a?(Exception)
 
@@ -37,8 +39,9 @@ class MarketAPITest < Minitest::Test
     payload = '{"data":[{"id":"ton","attributes":{"name":"TON"}}]}'
     api = api_with(response("200", payload))
 
-    assert_equal "ton", api.products.first.fetch("id")
+    assert_equal "ton", api.products(locale: "uk_UA").first.fetch("id")
     assert_equal 1, api.attempts
+    assert_equal "locale=uk_UA", api.uris.first.query
   end
 
   def test_retries_gateway_errors

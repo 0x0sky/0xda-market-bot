@@ -4,6 +4,7 @@ require "time"
 require_relative "market_api"
 require_relative "telegram_api"
 require_relative "price_messages"
+require_relative "locale"
 
 module ZeroXDA
   module MarketClientBot
@@ -136,7 +137,7 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        products = @market_api.products
+        products = @market_api.products(locale: locale_for(message))
         send_message(
           chat_id,
           "обери продукт для купівлі:",
@@ -155,7 +156,9 @@ module ZeroXDA
           chat: message.fetch("chat")
         )
         sync_commands(chat_id, user)
-        product = @market_api.products.find { |entry| entry.fetch("id") == match[1] }
+        product = @market_api.products(locale: locale_for(callback)).find do |entry|
+          entry.fetch("id") == match[1]
+        end
         raise ArgumentError, "product is unavailable" unless product
 
         @telegram_api.answer_callback_query(
@@ -243,10 +246,12 @@ module ZeroXDA
         sync_commands(chat_id, user)
         return send_message(chat_id, "доступ заборонено.") unless admin?(user)
 
+        locale = locale_for(message)
         proposal = @market_api.price_proposal(
-          actor_telegram_user_id: message.fetch("from").fetch("id")
+          actor_telegram_user_id: message.fetch("from").fetch("id"),
+          locale: locale
         )
-        send_message(chat_id, PriceMessages.application_text(proposal))
+        send_message(chat_id, PriceMessages.application_text(proposal, locale: locale))
       end
 
       # /apply_price <sku|position|short name> <amount in USDT>
@@ -256,13 +261,17 @@ module ZeroXDA
         sync_commands(chat_id, user)
         return send_message(chat_id, "доступ заборонено.") unless admin?(user)
 
-        reference, amount = argument.to_s.split(/\s+/, 2)
-        amount = amount&.strip
-        unless reference && amount&.match?(PRICE_AMOUNT_PATTERN)
-          return send_message(chat_id, PriceMessages::APPLY_PRICE_USAGE)
+        parts = argument.to_s.split(/\s+/)
+        amount = parts.pop
+        reference = parts.join(" ")
+        unless !reference.empty? && amount&.match?(PRICE_AMOUNT_PATTERN)
+          return send_message(
+            chat_id,
+            PriceMessages.apply_price_usage(locale: locale_for(message))
+          )
         end
 
-        product = resolve_product(reference)
+        product = resolve_product(reference, locale: locale_for(message))
         unless product
           return send_message(
             chat_id,
@@ -283,8 +292,8 @@ module ZeroXDA
         )
       end
 
-      def resolve_product(reference)
-        products = @market_api.products
+      def resolve_product(reference, locale:)
+        products = @market_api.products(locale: locale)
         normalized = reference.to_s.downcase.strip
         products.find { |product| product.fetch("id") == normalized } ||
           products.find { |product| product.dig("attributes", "position").to_s == normalized } ||
@@ -301,6 +310,7 @@ module ZeroXDA
         matches = products.select do |product|
           haystack = [
             product.fetch("id"),
+            product.dig("attributes", "short_name"),
             product.dig("attributes", "name"),
             product.dig("attributes", "button_label")
           ].compact.join(" ").downcase
@@ -317,6 +327,10 @@ module ZeroXDA
           user: message.fetch("from"),
           chat: message.fetch("chat")
         )
+      end
+
+      def locale_for(update)
+        Locale.resolve(update.fetch("from", {})["language_code"])
       end
 
       def sync_commands(chat_id, user)

@@ -54,23 +54,29 @@ admin operation.
 
 ## Catalog
 
-`/buy` loads active products from `GET /v1/products` and renders the first nine
-products as a 3x3 inline keyboard. Product callbacks use the stable `buy_<sku>`
-contract.
+`/buy` loads active products from `GET /v1/products?locale=...` and renders the
+first nine products as a 3x3 inline keyboard. Product callbacks use the stable
+`buy_<sku>` contract.
 
 Catalog rules:
 
 - product rows are never hardcoded in the bot
 - button text comes from `attributes.button_label` or `attributes.name`
 - callback SKU is the product `id`
+- full names, button labels, ordering and short names come from the core database
+- Telegram `language_code=uk` resolves to `uk_UA`; unsupported or absent
+  language codes fall back to `en_US`
 - the bot stays provider-agnostic and database-agnostic
 
 ## Price Application
 
 Admins can apply product prices through Telegram without touching the database.
 
-`/apply_prices` requests `GET /v1/admin/prices/proposal` and sends a form with
-product positions, SKUs, yesterday prices and current prices.
+`/apply_prices` requests localized `GET /v1/admin/prices/proposal` data and sends
+a form with database-defined product positions, SKUs, full names, yesterday and
+current prices, the internal editor UUID and application time. Product rows are
+never duplicated in a bot template. Only interface copy belongs to the bot's
+`en_US` / `uk_UA` message catalog.
 
 `/apply_price` accepts a product reference and amount in USDT:
 
