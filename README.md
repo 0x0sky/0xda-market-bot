@@ -1,6 +1,6 @@
-# 0xda-market Client Bot
+# 0xda-market Bot
 
-Private Telegram client for `0xda-market`.
+Private Telegram interface for `0xda-market` clients.
 
 The bot is a thin Telegram interface over the market core. It authenticates users
 through the core API, renders the active catalog, exposes admin-only operations,
@@ -41,7 +41,7 @@ Client commands:
 
 Admin commands:
 
-- `/servers` — health and UTC server time for market core and client bot
+- `/servers` — health and UTC server time for market core and bot
 - `/users` — active Telegram users; shows Telegram ID, internal UUID and role
 - `/setadmin @username` or `/setadmin TELEGRAM_ID` — promote a registered user
 - `/apply_prices` — open the current price application form
@@ -110,7 +110,7 @@ switches environments, only code moves between branches.
 | --- | --- | --- |
 | Git branch | `master` | `release` |
 | Render service | `0xda-market-test-bot` | `0xda-market-bot` |
-| Telegram bot | test client bot | production client bot |
+| Telegram bot | test bot | production bot |
 | `MARKET_API_URL` | `https://zeroxda-market-test.onrender.com` | `https://zeroxda-market.onrender.com` |
 | `MARKET_API_TOKEN` | test core `PUBLIC_API_TOKEN` | production core `PUBLIC_API_TOKEN` |
 | Supabase | `0xda-market-test` through the test core | `0xda-market` through the production core |
@@ -132,7 +132,7 @@ Configure these variables per Render web service:
 
 Configure these variables on the price digest cron service:
 
-- `TELEGRAM_BOT_TOKEN` — production client bot token
+- `TELEGRAM_BOT_TOKEN` — production bot token
 - `MARKET_API_URL` — production core URL
 - `MARKET_API_TOKEN` — production core `PUBLIC_API_TOKEN`
 - `FORCE_PRICE_DIGEST` — optional manual override; set to `1` only for manual
