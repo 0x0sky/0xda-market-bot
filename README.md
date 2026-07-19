@@ -115,10 +115,9 @@ switches environments, only code moves between branches.
 | `MARKET_API_TOKEN` | test core `PUBLIC_API_TOKEN` | production core `PUBLIC_API_TOKEN` |
 | Supabase | `0xda-market-test` through the test core | `0xda-market` through the production core |
 
-Code reaches production only through the "Promote to production" GitHub
-workflow, which promotes the production release branch from `master`. Render
-deploys each service from its configured branch; enable "Auto-Deploy: After CI
-Checks Pass" on both web services so a red build never ships.
+Code reaches production through a pull request from `master` to the protected
+`release` branch. Render deploys each service from the branch declared in
+`render.yaml` after the `test` CI check passes.
 
 ## Environment Variables
 
