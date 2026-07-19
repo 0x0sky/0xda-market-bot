@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Retry and cold-start handling for temporary market API failures.
 - Separate Render test and production web services and a production digest
   cron service.
+- Exact-commit Render deployment verification for both test and production bot
+  services, backed by the revision reported from `/health`.
 
 ### Changed
 

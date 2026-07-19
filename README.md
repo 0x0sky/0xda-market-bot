@@ -16,7 +16,7 @@ for users, roles, products, prices and permissions.
 
 HTTP surface:
 
-- `GET /health` — bot health and UTC server time
+- `GET /health` — bot health, UTC server time and deployed Git revision
 - `POST /telegram/webhook` — Telegram webhook, authorized with
   `X-Telegram-Bot-Api-Secret-Token`
 
@@ -124,6 +124,10 @@ switches environments, only code moves between branches.
 Code reaches production through a pull request from `master` to the protected
 `release` branch. Render deploys each service from the branch declared in
 `render.yaml` after the `test` CI check passes.
+
+The post-CI deployment gate polls `/health` until its `revision` matches the
+exact tested commit. Render supplies this value through `RENDER_GIT_COMMIT`, so
+the release tag cannot be created from an unverified production revision.
 
 ## Environment Variables
 
