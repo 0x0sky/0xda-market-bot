@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `/apply_price` with a missing or malformed product/amount now starts a short
+  dialog instead of a usage hint: the bot asks for the amount when only the
+  product is given, and walks through product selection (catalog buttons or a
+  typed sku/position/short name) and then the amount when arguments are absent
+  or invalid.
+
 ## [0.1.0] - 2026-07-19
 
 ### Added

@@ -16,7 +16,9 @@ module ZeroXDA
       CATALOG_PAGE_SIZE = 9
       CATALOG_COLUMNS = 3
       BUY_CALLBACK_PATTERN = /\Abuy_([a-z0-9][a-z0-9_-]{0,59})\z/
+      APPLY_PRICE_CALLBACK_PATTERN = /\Aapplyprice_([a-z0-9][a-z0-9_-]{0,59})\z/
       PRICE_AMOUNT_PATTERN = /\A\d+(?:\.\d{1,6})?\z/
+      PRICE_DIALOG_TTL = 600
       START_COMMANDS = [
         { command: "start", description: "авторизація" }
       ].freeze
@@ -48,6 +50,8 @@ module ZeroXDA
         @clock = clock
         @server_start_notice_delay = server_start_notice_delay
         @status_message_ttl = status_message_ttl
+        @price_dialogs = {}
+        @price_dialogs_lock = Mutex.new
       end
 
       def handle(update)
@@ -58,6 +62,7 @@ module ZeroXDA
 
         command, argument = parse_command(message["text"])
         if command
+          clear_price_dialog(message.fetch("chat").fetch("id"))
           with_server_start_notice(message) do
             case command
             when "/start"
@@ -78,6 +83,8 @@ module ZeroXDA
               apply_single_price(message, argument)
             end
           end
+        elsif message["text"] && price_dialog_for(message)
+          continue_price_dialog(message)
         end
       rescue KeyError, ArgumentError, MarketAPI::Error => error
         notify_failure(message || callback&.fetch("message", nil), error)
@@ -146,9 +153,15 @@ module ZeroXDA
       end
 
       def handle_callback(callback)
-        match = BUY_CALLBACK_PATTERN.match(callback.fetch("data").to_s)
-        return unless match
+        data = callback.fetch("data").to_s
+        if (match = BUY_CALLBACK_PATTERN.match(data))
+          handle_buy_callback(callback, match[1])
+        elsif (match = APPLY_PRICE_CALLBACK_PATTERN.match(data))
+          handle_apply_price_callback(callback, match[1])
+        end
+      end
 
+      def handle_buy_callback(callback, sku)
         message = callback.fetch("message")
         chat_id = message.fetch("chat").fetch("id")
         user = @market_api.authenticate_telegram(
@@ -156,15 +169,48 @@ module ZeroXDA
           chat: message.fetch("chat")
         )
         sync_commands(chat_id, user)
-        product = @market_api.products(locale: locale_for(callback)).find do |entry|
-          entry.fetch("id") == match[1]
-        end
+        product = find_product_by_sku(sku, locale: locale_for(callback))
         raise ArgumentError, "product is unavailable" unless product
 
         @telegram_api.answer_callback_query(
           callback_query_id: callback.fetch("id"),
           text: "обрано: #{product.dig("attributes", "name")}"
         )
+      end
+
+      def handle_apply_price_callback(callback, sku)
+        message = callback.fetch("message")
+        chat_id = message.fetch("chat").fetch("id")
+        user = @market_api.authenticate_telegram(
+          user: callback.fetch("from"),
+          chat: message.fetch("chat")
+        )
+        sync_commands(chat_id, user)
+        unless admin?(user)
+          @telegram_api.answer_callback_query(callback_query_id: callback.fetch("id"))
+          return send_message(chat_id, "доступ заборонено.")
+        end
+
+        locale = locale_for(callback)
+        product = find_product_by_sku(sku, locale: locale)
+        raise ArgumentError, "product is unavailable" unless product
+
+        request_price_amount(
+          chat_id: chat_id,
+          user_id: callback.fetch("from").fetch("id"),
+          product: product,
+          locale: locale
+        )
+        @telegram_api.answer_callback_query(
+          callback_query_id: callback.fetch("id"),
+          text: "обрано: #{product.dig("attributes", "name")}"
+        )
+      end
+
+      def find_product_by_sku(sku, locale:)
+        @market_api.products(locale: locale).find do |entry|
+          entry.fetch("id") == sku
+        end
       end
 
       def catalog_keyboard(products, callback_prefix:)
@@ -254,42 +300,150 @@ module ZeroXDA
         send_message(chat_id, PriceMessages.application_text(proposal, locale: locale))
       end
 
-      # /apply_price <sku|position|short name> <amount in USDT>
+      # /apply_price <sku|position|short name> <amount in USDT>. Missing or
+      # invalid parts fall back to a short dialog: first the product (typed or
+      # picked from the catalog keyboard), then the amount.
       def apply_single_price(message, argument)
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
         return send_message(chat_id, "доступ заборонено.") unless admin?(user)
 
+        locale = locale_for(message)
+        user_id = message.fetch("from").fetch("id")
         parts = argument.to_s.split(/\s+/)
-        amount = parts.pop
-        reference = parts.join(" ")
-        unless !reference.empty? && amount&.match?(PRICE_AMOUNT_PATTERN)
-          return send_message(
-            chat_id,
-            PriceMessages.apply_price_usage(locale: locale_for(message))
-          )
+        if parts.empty?
+          return request_product_selection(chat_id: chat_id, user_id: user_id, locale: locale)
         end
 
-        product = resolve_product(reference, locale: locale_for(message))
-        unless product
-          return send_message(
-            chat_id,
-            "product not found: #{reference}\nuse a sku or position from /apply_prices"
-          )
-        end
+        amount = parts.last if parts.length >= 2 && parts.last.match?(PRICE_AMOUNT_PATTERN)
+        reference = (amount ? parts[0..-2] : parts).join(" ")
+        product = resolve_product(reference, locale: locale)
 
-        applied = @market_api.apply_prices(
-          actor_telegram_user_id: message.fetch("from").fetch("id"),
-          prices: [{ sku: product.fetch("id"), amount_usdt: amount }]
+        if product && amount
+          perform_price_application(
+            chat_id: chat_id,
+            actor_telegram_user_id: user_id,
+            sku: product.fetch("id"),
+            name: product.dig("attributes", "name"),
+            amount: amount
+          )
+        elsif product
+          request_price_amount(chat_id: chat_id, user_id: user_id, product: product, locale: locale)
+        elsif amount.nil? && parts.length >= 2 &&
+              (product = resolve_product(parts[0..-2].join(" "), locale: locale))
+          send_message(chat_id, PriceMessages.invalid_amount(locale: locale))
+          request_price_amount(chat_id: chat_id, user_id: user_id, product: product, locale: locale)
+        else
+          send_message(chat_id, PriceMessages.product_not_found(reference, locale: locale))
+          request_product_selection(chat_id: chat_id, user_id: user_id, locale: locale)
+        end
+      end
+
+      def request_product_selection(chat_id:, user_id:, locale:)
+        products = @market_api.products(locale: locale)
+        store_price_dialog(chat_id, user_id: user_id, step: :product)
+        send_message(
+          chat_id,
+          PriceMessages.choose_product(locale: locale),
+          reply_markup: catalog_keyboard(products, callback_prefix: "applyprice")
         )
+      end
+
+      def request_price_amount(chat_id:, user_id:, product:, locale:)
+        store_price_dialog(
+          chat_id,
+          user_id: user_id,
+          step: :amount,
+          sku: product.fetch("id"),
+          name: product.dig("attributes", "name")
+        )
+        send_message(
+          chat_id,
+          PriceMessages.enter_amount(product.dig("attributes", "name"), locale: locale)
+        )
+      end
+
+      def continue_price_dialog(message)
+        chat_id = message.fetch("chat").fetch("id")
+        dialog = price_dialog_for(message)
+        return unless dialog
+
+        user = authenticate_user(message)
+        unless admin?(user)
+          clear_price_dialog(chat_id)
+          return send_message(chat_id, "доступ заборонено.")
+        end
+
+        locale = locale_for(message)
+        text = message["text"].to_s.strip
+        case dialog.fetch(:step)
+        when :product
+          product = resolve_product(text, locale: locale)
+          if product
+            request_price_amount(
+              chat_id: chat_id,
+              user_id: dialog.fetch(:user_id),
+              product: product,
+              locale: locale
+            )
+          else
+            send_message(chat_id, PriceMessages.product_not_found(text, locale: locale))
+          end
+        when :amount
+          if text.match?(PRICE_AMOUNT_PATTERN)
+            perform_price_application(
+              chat_id: chat_id,
+              actor_telegram_user_id: message.fetch("from").fetch("id"),
+              sku: dialog.fetch(:sku),
+              name: dialog.fetch(:name),
+              amount: text
+            )
+          else
+            send_message(chat_id, PriceMessages.invalid_amount(locale: locale))
+          end
+        end
+      end
+
+      def perform_price_application(chat_id:, actor_telegram_user_id:, sku:, name:, amount:)
+        applied = @market_api.apply_prices(
+          actor_telegram_user_id: actor_telegram_user_id,
+          prices: [{ sku: sku, amount_usdt: amount }]
+        )
+        clear_price_dialog(chat_id)
         price = applied.first
         send_message(
           chat_id,
           "price applied ✅\n" \
-          "#{product.dig("attributes", "name")} (#{product.fetch("id")})\n" \
+          "#{name} (#{sku})\n" \
           "#{price.dig("attributes", "amount_usdt")} USDT"
         )
+      end
+
+      def store_price_dialog(chat_id, **state)
+        @price_dialogs_lock.synchronize do
+          @price_dialogs[chat_id] = state.merge(expires_at: @clock.call + PRICE_DIALOG_TTL)
+        end
+      end
+
+      def price_dialog_for(message)
+        chat_id = message.fetch("chat").fetch("id")
+        @price_dialogs_lock.synchronize do
+          dialog = @price_dialogs[chat_id]
+          next nil unless dialog
+
+          if dialog.fetch(:expires_at) < @clock.call
+            @price_dialogs.delete(chat_id)
+            next nil
+          end
+          next nil unless dialog.fetch(:user_id) == message.dig("from", "id")
+
+          dialog
+        end
+      end
+
+      def clear_price_dialog(chat_id)
+        @price_dialogs_lock.synchronize { @price_dialogs.delete(chat_id) }
       end
 
       def resolve_product(reference, locale:)

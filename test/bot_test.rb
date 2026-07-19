@@ -219,17 +219,87 @@ class BotTest < Minitest::Test
     assert_equal "7.45", price.fetch(:amount_usdt)
   end
 
-  def test_apply_price_rejects_a_malformed_amount
-    @bot.handle(update("/apply_price premium_6m abc", user_id: 99, chat_id: 990))
+  def test_apply_price_without_an_amount_asks_for_the_amount
+    @bot.handle(update("/apply_price premium_6m", user_id: 99, chat_id: 990))
 
-    assert_includes @telegram.messages.last.fetch(:text), "формат: /apply_price"
+    assert_includes @telegram.messages.last.fetch(:text), "введи нову ціну для Telegram Premium 6 міс."
     assert_empty @market.applied_prices
+
+    @bot.handle(update("7.45", user_id: 99, chat_id: 990))
+
+    assert_equal(
+      [{ actor_telegram_user_id: 99, prices: [{ sku: "premium_6m", amount_usdt: "7.45" }] }],
+      @market.applied_prices
+    )
+    assert_includes @telegram.messages.last.fetch(:text), "price applied ✅"
   end
 
-  def test_apply_price_rejects_an_ambiguous_short_name
+  def test_apply_price_without_arguments_walks_through_product_and_amount
+    @bot.handle(update("/apply_price", user_id: 99, chat_id: 990))
+
+    message = @telegram.messages.last
+    assert_equal "обери продукт для оновлення ціни:", message.fetch(:text)
+    buttons = message.dig(:reply_markup, :inline_keyboard).flatten
+    assert_equal "applyprice_premium_3m", buttons.first.fetch(:callback_data)
+    assert_equal "applyprice_eth", buttons.last.fetch(:callback_data)
+
+    @bot.handle(callback("applyprice_stars_1000", user_id: 99, chat_id: 990))
+
+    assert_equal "обрано: Stars 1000", @telegram.answered_callbacks.last.fetch(:text)
+    assert_includes @telegram.messages.last.fetch(:text), "введи нову ціну для Stars 1000"
+    assert_empty @market.applied_prices
+
+    @bot.handle(update("3.10", user_id: 99, chat_id: 990))
+
+    price = @market.applied_prices.last.fetch(:prices).first
+    assert_equal "stars_1000", price.fetch(:sku)
+    assert_equal "3.10", price.fetch(:amount_usdt)
+  end
+
+  def test_apply_price_with_a_malformed_amount_asks_for_the_amount
+    @bot.handle(update("/apply_price premium_6m abc", user_id: 99, chat_id: 990))
+
+    texts = @telegram.messages.map { |item| item.fetch(:text) }
+    assert_includes texts, "некоректна сума. введи число, наприклад 7.45"
+    assert_includes texts.last, "введи нову ціну для Telegram Premium 6 міс."
+    assert_empty @market.applied_prices
+
+    @bot.handle(update("abc", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "некоректна сума"
+    assert_empty @market.applied_prices
+
+    @bot.handle(update("7.45", user_id: 99, chat_id: 990))
+
+    price = @market.applied_prices.last.fetch(:prices).first
+    assert_equal "premium_6m", price.fetch(:sku)
+    assert_equal "7.45", price.fetch(:amount_usdt)
+  end
+
+  def test_apply_price_dialog_accepts_a_typed_product_after_an_unknown_reference
     @bot.handle(update("/apply_price premium 7.45", user_id: 99, chat_id: 990))
 
-    assert_includes @telegram.messages.last.fetch(:text), "product not found: premium"
+    texts = @telegram.messages.map { |item| item.fetch(:text) }
+    assert(texts.any? { |text| text.include?("продукт не знайдено: premium") })
+    assert_equal "обери продукт для оновлення ціни:", texts.last
+    assert_empty @market.applied_prices
+
+    @bot.handle(update("premium_6m", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "введи нову ціну для Telegram Premium 6 міс."
+
+    @bot.handle(update("7.45", user_id: 99, chat_id: 990))
+
+    price = @market.applied_prices.last.fetch(:prices).first
+    assert_equal "premium_6m", price.fetch(:sku)
+    assert_equal "7.45", price.fetch(:amount_usdt)
+  end
+
+  def test_a_new_command_cancels_a_pending_price_dialog
+    @bot.handle(update("/apply_price premium_6m", user_id: 99, chat_id: 990))
+    @bot.handle(update("/status", user_id: 99, chat_id: 990))
+    @bot.handle(update("7.45", user_id: 99, chat_id: 990))
+
     assert_empty @market.applied_prices
   end
 

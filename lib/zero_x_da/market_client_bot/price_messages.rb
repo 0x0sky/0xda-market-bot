@@ -17,7 +17,12 @@ module ZeroXDA
           review: "Review all prices again: /apply_prices",
           persistence: "Until a new application is submitted, the last applied prices remain in effect.",
           usage: "format: /apply_price <sku|position|short name> <amount in USDT>\n" \
-                 "example: /apply_price Premium 6m 7.45"
+                 "example: /apply_price Premium 6m 7.45",
+          choose_product: "choose a product to update:",
+          enter_amount: "enter the new price for %s in USDT, e.g. 7.45",
+          invalid_amount: "invalid amount. enter a number, e.g. 7.45",
+          product_not_found: "product not found: %s\n" \
+                             "enter a sku, position or short name, or pick a product button"
         },
         "uk_UA" => {
           title: "0xda-market / застосування цін",
@@ -30,7 +35,12 @@ module ZeroXDA
           review: "Переглянути всі ціни: /apply_prices",
           persistence: "До наступного застосування діють останні встановлені ціни.",
           usage: "формат: /apply_price <sku|позиція|коротка назва> <сума в USDT>\n" \
-                 "приклад: /apply_price Premium 6m 7.45"
+                 "приклад: /apply_price Premium 6m 7.45",
+          choose_product: "обери продукт для оновлення ціни:",
+          enter_amount: "введи нову ціну для %s у USDT, наприклад 7.45",
+          invalid_amount: "некоректна сума. введи число, наприклад 7.45",
+          product_not_found: "продукт не знайдено: %s\n" \
+                             "введи sku, позицію або коротку назву, або обери продукт кнопкою"
         }
       }.freeze
 
@@ -56,6 +66,22 @@ module ZeroXDA
 
       def apply_price_usage(locale: "en_US")
         copy_for(locale).fetch(:usage)
+      end
+
+      def choose_product(locale: "en_US")
+        copy_for(locale).fetch(:choose_product)
+      end
+
+      def enter_amount(name, locale: "en_US")
+        format(copy_for(locale).fetch(:enter_amount), name)
+      end
+
+      def invalid_amount(locale: "en_US")
+        copy_for(locale).fetch(:invalid_amount)
+      end
+
+      def product_not_found(reference, locale: "en_US")
+        format(copy_for(locale).fetch(:product_not_found), reference)
       end
 
       def amount_label(value)
