@@ -147,6 +147,12 @@ Configure these variables on the price digest cron service:
 Secrets must be configured in Render and must not be committed. Production and
 test must use distinct bot tokens, webhook secrets and API tokens.
 
+## Versioning and releases
+
+Stable releases use Semantic Versioning tags such as `v0.1.0`. Notable changes
+are curated in [CHANGELOG.md](CHANGELOG.md); the promotion, tag, draft-release
+and rollback procedure is documented in [RELEASING.md](RELEASING.md).
+
 ## Local Development
 
 Install dependencies:
