@@ -55,13 +55,19 @@ module ZeroXDA
         get("v1/users?status=active", authenticated: true).fetch("data")
       end
 
-      def products
-        get("v1/products", authenticated: true).fetch("data")
+      def products(locale: "en_US")
+        get(
+          "v1/products?#{URI.encode_www_form(locale: locale)}",
+          authenticated: true
+        ).fetch("data")
       end
 
-      def price_proposal(actor_telegram_user_id:)
+      def price_proposal(actor_telegram_user_id:, locale: "en_US")
         get(
-          "v1/admin/prices/proposal?actor_telegram_user_id=#{actor_telegram_user_id}",
+          "v1/admin/prices/proposal?#{URI.encode_www_form(
+            actor_telegram_user_id: actor_telegram_user_id,
+            locale: locale
+          )}",
           authenticated: true
         ).fetch("data")
       end
