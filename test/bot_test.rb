@@ -53,6 +53,7 @@ class BotTest < Minitest::Test
     assert_equal "buy_premium_3m", buttons.first.fetch(:callback_data)
     assert_equal "buy_eth", buttons.last.fetch(:callback_data)
     assert_equal 1, @market.product_requests
+    assert_equal ["uk_UA"], @market.product_locales
   end
 
   def test_buy_callback_reauthenticates_the_client_and_acknowledges_selection
@@ -156,13 +157,28 @@ class BotTest < Minitest::Test
   def test_admin_receives_the_price_application_form
     @bot.handle(update("/apply_prices", user_id: 99, chat_id: 990))
 
-    assert_equal [99], @market.price_proposal_requests
+    assert_equal(
+      [{ actor_telegram_user_id: 99, locale: "uk_UA" }],
+      @market.price_proposal_requests
+    )
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "0xda-market / застосування цін"
+    assert_includes text, "базова валюта: USDT"
+    assert_includes text, "1. Telegram Premium 3 міс. (premium_3m)"
+    assert_includes text, "вчора: 7.20 · поточна: 7.45"
+    assert_includes text, "редактор: 12345678-1234-4000-8000-123456789012"
+    assert_includes text, "/apply_price <sku|позиція|коротка назва> <сума в USDT>"
+  end
+
+  def test_price_application_falls_back_to_en_us
+    @bot.handle(
+      update("/apply_prices", user_id: 99, chat_id: 990, language_code: "fr")
+    )
+
+    assert_equal "en_US", @market.price_proposal_requests.last.fetch(:locale)
     text = @telegram.messages.last.fetch(:text)
     assert_includes text, "0xda-market / price application"
-    assert_includes text, "base currency: USDT"
-    assert_includes text, "1. Telegram Premium 3 міс. (premium_3m)"
-    assert_includes text, "yesterday: 7.20 · current: 7.45"
-    assert_includes text, "/apply_price <sku|position> <amount in USDT>"
+    assert_includes text, "1. Telegram Premium 3 months (premium_3m)"
   end
 
   def test_non_admin_cannot_request_the_price_application_form
@@ -193,10 +209,20 @@ class BotTest < Minitest::Test
     assert_equal "3.10", price.fetch(:amount_usdt)
   end
 
+  def test_admin_applies_a_single_price_by_database_short_name
+    @bot.handle(
+      update("/apply_price Premium 6m 7.45", user_id: 99, chat_id: 990)
+    )
+
+    price = @market.applied_prices.last.fetch(:prices).first
+    assert_equal "premium_6m", price.fetch(:sku)
+    assert_equal "7.45", price.fetch(:amount_usdt)
+  end
+
   def test_apply_price_rejects_a_malformed_amount
     @bot.handle(update("/apply_price premium_6m abc", user_id: 99, chat_id: 990))
 
-    assert_includes @telegram.messages.last.fetch(:text), "format: /apply_price"
+    assert_includes @telegram.messages.last.fetch(:text), "формат: /apply_price"
     assert_empty @market.applied_prices
   end
 
@@ -248,7 +274,7 @@ class BotTest < Minitest::Test
 
   private
 
-  def update(text, user_id: 77, chat_id: 770)
+  def update(text, user_id: 77, chat_id: 770, language_code: "uk")
     {
       "message" => {
         "text" => text,
@@ -256,7 +282,7 @@ class BotTest < Minitest::Test
           "id" => user_id,
           "username" => "zero",
           "first_name" => "Sasha",
-          "language_code" => "uk"
+          "language_code" => language_code
         },
         "chat" => { "id" => chat_id, "type" => "private" }
       }

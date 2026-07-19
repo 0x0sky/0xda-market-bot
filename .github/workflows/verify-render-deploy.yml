@@ -1,0 +1,87 @@
+name: Verify Render bot deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-bot-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.head_branch == 'master' ||
+       github.event.workflow_run.head_branch == 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Verify exact Render bot revision
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$BRANCH" in
+            master)
+              environment_name="test"
+              service_url="https://zeroxda-market-test-bot.onrender.com"
+              ;;
+            release)
+              environment_name="production"
+              service_url="https://zeroxda-market-bot.onrender.com"
+              ;;
+            *)
+              echo "Unsupported deployment branch: $BRANCH" >&2
+              exit 1
+              ;;
+          esac
+
+          status=""
+          revision=""
+          server_time=""
+          for _ in {1..90}; do
+            if response="$(curl --fail --silent --show-error \
+              --connect-timeout 5 \
+              --max-time 10 \
+              "$service_url/health" 2>/dev/null)"; then
+              status="$(jq -r '.status // empty' <<<"$response")"
+              revision="$(jq -r '.revision // empty' <<<"$response")"
+              server_time="$(jq -r '.server_time // empty' <<<"$response")"
+              if [[ "$status" == "ok" && "$revision" == "$COMMIT_SHA" ]]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          if [[ "$status" != "ok" || "$revision" != "$COMMIT_SHA" ]]; then
+            echo "Render $environment_name bot did not reach commit $COMMIT_SHA." >&2
+            echo "Last health status: ${status:-unavailable}" >&2
+            echo "Last deployed revision: ${revision:-unavailable}" >&2
+            exit 1
+          fi
+
+          if [[ ! "$server_time" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+            echo "Render $environment_name bot returned an invalid server time." >&2
+            exit 1
+          fi
+
+          {
+            echo "## Render bot verification"
+            echo
+            echo "- Environment: \`$environment_name\`"
+            echo "- Commit: \`$COMMIT_SHA\`"
+            echo "- URL: $service_url/health"
+            echo "- Status: \`ok\`"
+            echo "- Revision match: \`passed\`"
+          } >> "$GITHUB_STEP_SUMMARY"
