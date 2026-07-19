@@ -36,7 +36,8 @@ class WebAppTest < Minitest::Test
       ZeroXDA::MarketClientBot::WebApp.new(
         bot: @handler,
         webhook_secret: "webhook-secret",
-        dispatcher: ImmediateDispatcher.new
+        dispatcher: ImmediateDispatcher.new,
+        revision: "test-revision"
       )
     )
   end
@@ -48,6 +49,7 @@ class WebAppTest < Minitest::Test
     document = JSON.parse(response.body)
     assert_equal "ok", document.fetch("status")
     assert_match(/\A\d{4}-\d{2}-\d{2}T/, document.fetch("server_time"))
+    assert_equal "test-revision", document.fetch("revision")
   end
 
   def test_rejects_a_webhook_without_the_telegram_secret

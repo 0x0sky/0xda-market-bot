@@ -22,18 +22,29 @@ module ZeroXDA
         "cache-control" => "no-store"
       }.freeze
 
-      def initialize(bot:, webhook_secret:, dispatcher: AsyncDispatcher.new)
+      def initialize(
+        bot:,
+        webhook_secret:,
+        dispatcher: AsyncDispatcher.new,
+        revision: ENV.fetch("RENDER_GIT_COMMIT", "unknown")
+      )
         raise ArgumentError, "Webhook secret must not be empty" if webhook_secret.to_s.empty?
 
         @bot = bot
         @webhook_secret = webhook_secret
         @dispatcher = dispatcher
+        @revision = revision.to_s.empty? ? "unknown" : revision.to_s
       end
 
       def call(environment)
         request = Rack::Request.new(environment)
         if request.get? && request.path_info == "/health"
-          return json_response(200, status: "ok", server_time: Time.now.utc.iso8601(6))
+          return json_response(
+            200,
+            status: "ok",
+            server_time: Time.now.utc.iso8601(6),
+            revision: @revision
+          )
         end
 
         if request.post? && request.path_info == "/telegram/webhook"
