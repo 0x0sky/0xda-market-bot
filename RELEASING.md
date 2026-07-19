@@ -14,9 +14,10 @@ for example, release `0.1.0` is tagged `v0.1.0` rather than `release_0.1`.
 4. Promote this repository with a pull request from `master` to `release`.
    Wait for release-branch CI and the Render production deployment, then verify
    `/start`, `/buy`, `/apply_prices` and one controlled price update.
-5. Run **Prepare GitHub release** with `vX.Y.Z`. The workflow retests the exact
-   `release` HEAD, builds the image, creates an annotated tag and saves a draft
-   GitHub Release.
+5. Run **Prepare GitHub release** with `vX.Y.Z`, or create
+   `release-request/vX.Y.Z` from the exact `release` HEAD. The workflow verifies
+   the production commit, retests it, builds the image, creates an annotated
+   tag and saves a draft GitHub Release.
 6. Review the draft and publish it after the matching core release is public.
 
 Tags are immutable release coordinates: never move or reuse a published tag.
