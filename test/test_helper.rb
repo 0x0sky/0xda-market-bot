@@ -8,7 +8,7 @@ class FakeMarketAPI
   PRODUCTS = [
     ["premium_3m", "Telegram Premium 3 міс.", "Premium 3 міс."],
     ["premium_6m", "Telegram Premium 6 міс.", "Premium 6 міс."],
-    ["premium_9m", "Telegram Premium 9 міс.", "Premium 9 міс."],
+    ["premium_12m", "Telegram Premium 12 міс.", "Premium 12 міс."],
     ["stars_500", "Stars 500", "Stars 500"],
     ["stars_1000", "Stars 1000", "Stars 1000"],
     ["stars_3000", "Stars 3000", "Stars 3000"],
