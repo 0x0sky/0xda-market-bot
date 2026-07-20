@@ -10,25 +10,25 @@ module ZeroXDA
           start: "🔐 authorization",
           buy: "🛍️ buy",
           status: "👤 account status",
-          apply_prices: "📦 apply prices",
-          apply_price: "💰 set product price (USDT)",
-          rates: "💱 exchange rates (USDT base)",
-          set_rate: "⚙️ set exchange rate",
-          users: "👥 active users",
-          servers: "📊 server status",
-          setadmin: "🔑 assign administrator"
+          apply_prices: "🛠️ 📦 apply prices",
+          apply_price: "🛠️ 💰 set product price (USDT)",
+          rates: "🛠️ 💱 exchange rates (USDT base)",
+          set_rate: "🛠️ ⚙️ set exchange rate",
+          users: "🛠️ 👥 active users",
+          servers: "🛠️ 📊 server status",
+          setadmin: "🛠️ 🔑 assign administrator"
         },
         "uk_UA" => {
           start: "🔐 авторизація",
           buy: "🛍️ купити",
           status: "👤 власний статус",
-          apply_prices: "📦 застосувати ціни",
-          apply_price: "💰 встановити ціну продукту",
-          rates: "💱 курси валют відносно USDT",
-          set_rate: "⚙️ встановити курс валюти",
-          users: "👥 активні користувачі",
-          servers: "📊 стан серверів",
-          setadmin: "🔑 призначити адміністратора"
+          apply_prices: "🛠️ 📦 застосувати ціни",
+          apply_price: "🛠️ 💰 встановити ціну продукту",
+          rates: "🛠️ 💱 курси валют відносно USDT",
+          set_rate: "🛠️ ⚙️ встановити курс валюти",
+          users: "🛠️ 👥 активні користувачі",
+          servers: "🛠️ 📊 стан серверів",
+          setadmin: "🛠️ 🔑 призначити адміністратора"
         }
       }.freeze
 
@@ -101,7 +101,9 @@ module ZeroXDA
         message_id = message["message_id"]
         return unless chat_id && message_id
 
-        schedule_message_deletion(chat_id, { "message_id" => message_id })
+        @telegram_api.delete_message(chat_id: chat_id, message_id: message_id)
+      rescue TelegramAPI::Error => error
+        warn "user command deletion failed: #{error.message}"
       end
     end
 
