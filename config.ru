@@ -3,6 +3,7 @@
 require "bundler/setup"
 require "rack/common_logger"
 require_relative "lib/zero_x_da/market_client_bot/bot"
+require_relative "lib/zero_x_da/market_client_bot/command_menu"
 require_relative "lib/zero_x_da/market_client_bot/market_api"
 require_relative "lib/zero_x_da/market_client_bot/telegram_api"
 require_relative "lib/zero_x_da/market_client_bot/web_app"
