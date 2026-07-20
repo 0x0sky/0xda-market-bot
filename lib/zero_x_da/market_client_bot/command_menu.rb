@@ -34,6 +34,7 @@ module ZeroXDA
 
       CLIENT_COMMANDS = %i[buy status].freeze
       ADMIN_COMMANDS = %i[apply_prices apply_price rates set_rate users servers setadmin].freeze
+      TRANSIENT_COMMANDS = ([:status] + ADMIN_COMMANDS).map { |name| "/#{name}" }.freeze
 
       module_function
 
@@ -81,6 +82,29 @@ module ZeroXDA
       end
     end
 
+    module TransientUserCommands
+      def handle(update)
+        super
+      ensure
+        delete_transient_user_command(update["message"])
+      end
+
+      private
+
+      def delete_transient_user_command(message)
+        return unless message
+
+        command = message["text"].to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s|\z)})&.[](1)&.downcase
+        return unless CommandMenu::TRANSIENT_COMMANDS.include?(command)
+
+        chat_id = message.dig("chat", "id")
+        message_id = message["message_id"]
+        return unless chat_id && message_id
+
+        schedule_message_deletion(chat_id, { "message_id" => message_id })
+      end
+    end
+
     module TelegramUpdateLocale
       def handle(update)
         language_code = update.dig("message", "from", "language_code") ||
@@ -93,6 +117,7 @@ module ZeroXDA
     end
 
     Bot.prepend(CommandMenuLocalization)
+    Bot.prepend(TransientUserCommands)
     Bot.prepend(TelegramUpdateLocale)
   end
 end
