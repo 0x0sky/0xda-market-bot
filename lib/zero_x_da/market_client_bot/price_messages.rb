@@ -52,10 +52,16 @@ module ZeroXDA
         proposal.each do |entry|
           attributes = entry.fetch("attributes")
           lines << "#{attributes.fetch("position")}. #{attributes.fetch("name")} (#{entry.fetch("id")})"
-          lines << "   #{copy.fetch(:previous)}: #{amount_label(attributes["previous_amount_usdt"])} · " \
-                   "#{copy.fetch(:current)}: #{amount_label(attributes["current_amount_usdt"])}"
-          lines << "   #{copy.fetch(:edited_by)}: #{value_label(attributes["current_edited_by_user_id"])} · " \
-                   "#{copy.fetch(:applied_at)}: #{value_label(attributes["current_applied_at"])}"
+
+          amounts = labeled_parts(copy,
+                                  previous: attributes["previous_amount_usdt"],
+                                  current: attributes["current_amount_usdt"])
+          lines << "   #{amounts}" unless amounts.empty?
+
+          details = labeled_parts(copy,
+                                  edited_by: attributes["current_edited_by_user_id"],
+                                  applied_at: attributes["current_applied_at"])
+          lines << "   #{details}" unless details.empty?
         end
         lines << ""
         lines << copy.fetch(:update)
@@ -84,12 +90,13 @@ module ZeroXDA
         format(copy_for(locale).fetch(:product_not_found), reference)
       end
 
-      def amount_label(value)
-        value.nil? || value.to_s.empty? ? "—" : value.to_s
-      end
+      # Renders only labels whose values are present; skips empty ones entirely.
+      def labeled_parts(copy, pairs)
+        pairs.filter_map do |label_key, value|
+          next if value.nil? || value.to_s.empty?
 
-      def value_label(value)
-        value.nil? || value.to_s.empty? ? "—" : value.to_s
+          "#{copy.fetch(label_key)}: #{value}"
+        end.join(" · ")
       end
 
       def copy_for(locale)
