@@ -7,33 +7,33 @@ module ZeroXDA
     module CommandMenu
       COPY = {
         "en_US" => {
-          start: "authorization",
-          buy: "buy",
-          status: "account status",
-          servers: "server status",
-          users: "active users",
-          setadmin: "assign administrator",
-          apply_prices: "apply prices",
-          apply_price: "set product price (USDT)",
-          rates: "exchange rates (USDT base)",
-          set_rate: "set exchange rate"
+          start: "🔐 authorization",
+          buy: "🛍️ buy",
+          status: "👤 account status",
+          apply_prices: "📦 apply prices",
+          apply_price: "💰 set product price (USDT)",
+          rates: "💱 exchange rates (USDT base)",
+          set_rate: "⚙️ set exchange rate",
+          users: "👥 active users",
+          servers: "📊 server status",
+          setadmin: "🔑 assign administrator"
         },
         "uk_UA" => {
-          start: "авторизація",
-          buy: "купити",
-          status: "власний статус",
-          servers: "стан серверів",
-          users: "активні користувачі",
-          setadmin: "призначити адміністратора",
-          apply_prices: "застосувати ціни",
-          apply_price: "встановити ціну продукту",
-          rates: "курси валют відносно USDT",
-          set_rate: "встановити курс валюти"
+          start: "🔐 авторизація",
+          buy: "🛍️ купити",
+          status: "👤 власний статус",
+          apply_prices: "📦 застосувати ціни",
+          apply_price: "💰 встановити ціну продукту",
+          rates: "💱 курси валют відносно USDT",
+          set_rate: "⚙️ встановити курс валюти",
+          users: "👥 активні користувачі",
+          servers: "📊 стан серверів",
+          setadmin: "🔑 призначити адміністратора"
         }
       }.freeze
 
       CLIENT_COMMANDS = %i[buy status].freeze
-      ADMIN_COMMANDS = %i[servers users setadmin apply_prices apply_price rates set_rate].freeze
+      ADMIN_COMMANDS = %i[apply_prices apply_price rates set_rate users servers setadmin].freeze
 
       module_function
 
