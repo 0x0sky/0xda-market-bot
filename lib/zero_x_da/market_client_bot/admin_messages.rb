@@ -1,21 +1,24 @@
 # frozen_string_literal: true
 
 require_relative "timestamp_formatter"
+require_relative "i18n"
 
 module ZeroXDA
   module MarketClientBot
     module AdminMessages
+      include I18n::Helpers
+
       private
 
       def show_servers(message)
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+        return send_message(chat_id, t(:access_denied)) unless admin?(user)
 
         health = @market_api.health
         text = <<~TEXT.strip
-          🖥️ Стан сервісів
+          #{t(:server_status_title)}
 
           #{status_icon(health.fetch("status", "unknown"))} Market core
           🕒 #{TimestampFormatter.format(health["server_time"])}
@@ -30,7 +33,7 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+        return send_message(chat_id, t(:access_denied)) unless admin?(user)
 
         user_messages(@market_api.active_users).each { |text| send_message(chat_id, text) }
       end
@@ -39,7 +42,7 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+        return send_message(chat_id, t(:access_denied)) unless admin?(user)
 
         locale = locale_for(message)
         proposal = @market_api.price_proposal(
@@ -54,9 +57,9 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
         sync_commands(chat_id, user)
-        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+        return send_message(chat_id, t(:access_denied)) unless admin?(user)
 
-        lines = ["💱 Курси валют", "База: USDT", ""]
+        lines = [t(:rates_title), t(:base_currency), ""]
         @market_api.fx_rates.each do |rate|
           attributes = rate.fetch("attributes")
           lines << "• 1 #{attributes.fetch("currency")} = #{attributes.fetch("usdt_per_unit")} USDT"
@@ -64,7 +67,7 @@ module ZeroXDA
           lines << "  🕒 #{TimestampFormatter.format(updated_at)}" if updated_at
         end
         lines << ""
-        lines << "Оновити: /set_rate <валюта> <USDT за 1 одиницю>"
+        lines << "/set_rate <currency> <USDT per unit>"
         send_message(chat_id, lines.join("\n"))
       end
 
@@ -72,8 +75,8 @@ module ZeroXDA
         chat_id = message.fetch("chat").fetch("id")
         actor = authenticate_user(message)
         sync_commands(chat_id, actor)
-        return send_message(chat_id, "доступ заборонено.") unless admin?(actor)
-        return send_message(chat_id, "формат: /setadmin @username або Telegram ID") if target.to_s.empty?
+        return send_message(chat_id, t(:access_denied)) unless admin?(actor)
+        return send_message(chat_id, t(:admin_format)) if target.to_s.empty?
 
         assignment = @market_api.set_admin(
           actor_telegram_user_id: message.fetch("from").fetch("id"),
@@ -83,19 +86,19 @@ module ZeroXDA
         sync_admin_target(attributes["telegram_chat_id"], chat_id)
         send_message(
           chat_id,
-          "🔑 Адміністратора призначено ✅\n\n" \
+          "🔑 #{t(:assigned_admin_notice)}\n\n" \
           "👤 #{display_username(attributes)}\n" \
-          "Роль: #{attributes.fetch("role")}"
+          "#{t(:role_label, role: attributes.fetch("role"))}"
         )
       end
 
       def user_messages(users)
-        messages = ["👥 Активні користувачі: #{users.length}"]
+        messages = [t(:active_users_title, count: users.length)]
         users.each do |user|
           attributes = user.fetch("attributes")
           block = <<~TEXT.strip
             👤 #{display_username(attributes)}
-            Роль: #{attributes.fetch("role")}
+            #{t(:role_label, role: attributes.fetch("role"))}
           TEXT
           candidate = "#{messages.last}\n\n#{block}"
           candidate.bytesize > Bot::MESSAGE_LIMIT ? messages << block : messages[-1] = candidate
@@ -104,8 +107,7 @@ module ZeroXDA
       end
 
       def price_application_text(proposal, usernames:, locale:)
-        ukrainian = locale == "uk_UA"
-        lines = [ukrainian ? "📦 Застосування цін" : "📦 Price application", "💵 USDT", ""]
+        lines = [t(:prices_title, locale: locale), "💵 USDT", ""]
 
         proposal.each do |entry|
           attributes = entry.fetch("attributes")
@@ -124,9 +126,8 @@ module ZeroXDA
           lines << ""
         end
 
-        lines << (ukrainian ? "Змінити одну: /apply_price <sku|позиція|назва> <сума>" :
-                              "Update one: /apply_price <sku|position|name> <amount>")
-        lines << (ukrainian ? "Переглянути знову: /apply_prices" : "Review again: /apply_prices")
+        lines << t(:update_single_price, locale: locale)
+        lines << t(:review_prices, locale: locale)
         lines.join("\n").strip
       end
 
@@ -142,8 +143,8 @@ module ZeroXDA
         normalize_username(value)
       end
 
-      def display_username(attributes, fallback: "без username")
-        normalize_username(attributes["telegram_username"] || attributes["username"]) || fallback
+      def display_username(attributes, fallback: nil)
+        normalize_username(attributes["telegram_username"] || attributes["username"]) || fallback || t(:no_username)
       end
 
       def normalize_username(value)
