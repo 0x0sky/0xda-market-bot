@@ -33,7 +33,7 @@ module ZeroXDA
       }.freeze
 
       CLIENT_COMMANDS = %i[buy status].freeze
-      ADMIN_COMMANDS = %i[apply_prices apply_price rates set_rate users servers setadmin].freeze
+      ADMIN_COMMANDS = %i[servers users setadmin apply_prices apply_price rates set_rate].freeze
       TRANSIENT_COMMANDS = ([:status] + ADMIN_COMMANDS).map { |name| "/#{name}" }.freeze
 
       module_function
