@@ -98,7 +98,7 @@ module ZeroXDA
             Роль: #{attributes.fetch("role")}
           TEXT
           candidate = "#{messages.last}\n\n#{block}"
-          candidate.bytesize > MESSAGE_LIMIT ? messages << block : messages[-1] = candidate
+          candidate.bytesize > Bot::MESSAGE_LIMIT ? messages << block : messages[-1] = candidate
         end
         messages
       end

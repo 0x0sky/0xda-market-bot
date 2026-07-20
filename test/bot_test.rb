@@ -37,7 +37,7 @@ class BotTest < Minitest::Test
     @bot.handle(update("/status"))
 
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "role: client"
+    assert_includes text, "Роль: client"
     assert_includes text, "status: active ✅"
     assert_equal 0, @market.health_requests
   end
@@ -84,7 +84,7 @@ class BotTest < Minitest::Test
     bot.handle(update("/status"))
 
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "role: client"
+    assert_includes text, "Роль: client"
     refute_includes text, "role: broker"
   end
 
@@ -92,10 +92,10 @@ class BotTest < Minitest::Test
     @bot.handle(update("/servers", user_id: 99, chat_id: 990))
 
     text = @telegram.messages.first.fetch(:text)
-    assert_includes text, "market core: ok ✅"
-    assert_includes text, "core time: 2026-07-12T00:00:00.000000Z"
-    assert_includes text, "client bot: ok ✅"
-    assert_includes text, "bot time: 2026-07-12T00:00:01.000000Z"
+    assert_includes text, "✅ Market core"
+    assert_includes text, "12.07.2026 · 00:00:00 UTC"
+    assert_includes text, "✅ Client bot"
+    assert_includes text, "12.07.2026 · 00:00:01 UTC"
   end
 
   def test_non_admin_cannot_see_or_execute_servers
@@ -110,10 +110,10 @@ class BotTest < Minitest::Test
     @bot.handle(update("/users", user_id: 99, chat_id: 990))
 
     text = @telegram.messages.first.fetch(:text)
-    assert_includes text, "active users: 1"
-    assert_includes text, "telegram: 77"
-    assert_includes text, "uuid: 12345678-1234-4000-8000-123456789012"
-    assert_includes text, "role: client"
+    assert_includes text, "👥 Активні користувачі: 1"
+    assert_includes text, "👤 @zero"
+    refute_includes text, "12345678-1234-4000-8000-123456789012"
+    assert_includes text, "Роль: client"
   end
 
   def test_non_admin_cannot_list_active_users
@@ -141,7 +141,7 @@ class BotTest < Minitest::Test
     command_set = @telegram.command_sets.last
     assert_equal({ type: "chat", chat_id: "880" }, command_set.fetch(:scope))
     assert_includes command_set.fetch(:commands).map { |item| item.fetch(:command) }, "setadmin"
-    assert_includes @telegram.messages.last.fetch(:text), "admin призначений"
+    assert_includes @telegram.messages.last.fetch(:text), "Адміністратора призначено"
   end
 
   def test_non_admin_cannot_execute_a_manually_typed_setadmin_command
@@ -161,21 +161,21 @@ class BotTest < Minitest::Test
       @market.price_proposal_requests
     )
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "0xda-market / застосування цін"
-    assert_includes text, "базова валюта: USDT"
-    assert_includes text, "1. Telegram Premium 3 міс. (premium_3m)"
-    assert_includes text, "вчора: 7.20 · поточна: 7.45"
-    assert_includes text, "редактор: 12345678-1234-4000-8000-123456789012"
-    assert_includes text, "/apply_price <sku|позиція|коротка назва> <сума в USDT>"
+    assert_includes text, "📦 Застосування цін"
+    assert_includes text, "💵 USDT"
+    assert_includes text, "1. Telegram Premium 3 міс. · premium_3m"
+    assert_includes text, "⏮ 7.20 → 💰 7.45 USDT"
+    assert_includes text, "✏️ @zero"
+    assert_includes text, "/apply_price <sku|позиція|назва> <сума>"
   end
 
   def test_price_application_falls_back_to_en_us
     @bot.handle(update("/apply_prices", user_id: 99, chat_id: 990, language_code: "fr"))
 
-    assert_equal "en_US", @market.price_proposal_requests.last.fetch(:locale)
+    assert_equal "fr_FR", @market.price_proposal_requests.last.fetch(:locale)
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "0xda-market / price application"
-    assert_includes text, "1. Telegram Premium 3 months (premium_3m)"
+    assert_includes text, "📦 Application des prix"
+    assert_includes text, "1. Telegram Premium 3 months · premium_3m"
   end
 
   def test_non_admin_cannot_request_the_price_application_form
@@ -310,10 +310,10 @@ class BotTest < Minitest::Test
 
     assert_equal 1, @market.fx_rate_requests
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "0xda-market / fx rates"
-    assert_includes text, "USDT: 1"
-    assert_includes text, "EUR: 1.16"
-    assert_includes text, "/set_rate <currency> <usdt per 1 unit>"
+    assert_includes text, "💱 Курси валют"
+    assert_includes text, "1 USDT = 1 USDT"
+    assert_includes text, "1 EUR = 1.16 USDT"
+    assert_includes text, "/set_rate"
   end
 
   def test_admin_sets_an_fx_rate_with_uppercased_currency
@@ -362,7 +362,7 @@ class BotTest < Minitest::Test
   def test_accepts_command_with_bot_username
     @bot.handle(update("/servers@zeroxda_market_client_bot", user_id: 99, chat_id: 990))
 
-    assert_includes @telegram.messages.first.fetch(:text), "market core: ok"
+    assert_includes @telegram.messages.first.fetch(:text), "✅ Market core"
   end
 
   def test_reports_a_slow_market_start_and_sends_the_result_later
@@ -380,7 +380,7 @@ class BotTest < Minitest::Test
 
     bot.handle(update("/start"))
 
-    assert_equal "0xda-market запускається…", @telegram.messages.first.fetch(:text)
+    assert_equal "Сервер запускається…", @telegram.messages.first.fetch(:text)
     assert_includes @telegram.messages.last.fetch(:text), "авторизація успішна"
   end
 
