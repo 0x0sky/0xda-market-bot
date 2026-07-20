@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "locale"
+require_relative "admin_messages"
+require_relative "brandless_copy"
+require_relative "i18n"
 
 module ZeroXDA
   module MarketClientBot
@@ -29,6 +32,54 @@ module ZeroXDA
           apply_price: "💰 встановити ціну продукту",
           rates: "💱 курси валют відносно USDT",
           set_rate: "⚙️ встановити курс валюти"
+        },
+        "ru_RU" => {
+          start: "🔐 авторизация",
+          buy: "🛍️ купить",
+          status: "👤 статус аккаунта",
+          servers: "📊 состояние серверов",
+          users: "👥 активные пользователи",
+          setadmin: "🔑 назначить администратора",
+          apply_prices: "📦 применить цены",
+          apply_price: "💰 установить цену продукта",
+          rates: "💱 курсы валют относительно USDT",
+          set_rate: "⚙️ установить курс валюты"
+        },
+        "fr_FR" => {
+          start: "🔐 autorisation",
+          buy: "🛍️ acheter",
+          status: "👤 état du compte",
+          servers: "📊 état des serveurs",
+          users: "👥 utilisateurs actifs",
+          setadmin: "🔑 nommer un administrateur",
+          apply_prices: "📦 appliquer les prix",
+          apply_price: "💰 définir le prix du produit",
+          rates: "💱 taux de change (base USDT)",
+          set_rate: "⚙️ définir le taux de change"
+        },
+        "es_ES" => {
+          start: "🔐 autorización",
+          buy: "🛍️ comprar",
+          status: "👤 estado de la cuenta",
+          servers: "📊 estado de los servidores",
+          users: "👥 usuarios activos",
+          setadmin: "🔑 asignar administrador",
+          apply_prices: "📦 aplicar precios",
+          apply_price: "💰 establecer precio del producto",
+          rates: "💱 tipos de cambio (base USDT)",
+          set_rate: "⚙️ establecer tipo de cambio"
+        },
+        "de_DE" => {
+          start: "🔐 Autorisierung",
+          buy: "🛍️ kaufen",
+          status: "👤 Kontostatus",
+          servers: "📊 Serverstatus",
+          users: "👥 aktive Nutzer",
+          setadmin: "🔑 Administrator zuweisen",
+          apply_prices: "📦 Preise übernehmen",
+          apply_price: "💰 Produktpreis festlegen",
+          rates: "💱 Wechselkurse (USDT-Basis)",
+          set_rate: "⚙️ Wechselkurs festlegen"
         }
       }.freeze
 
@@ -36,7 +87,7 @@ module ZeroXDA
       ADMIN_WORK_COMMANDS = %i[apply_prices apply_price rates set_rate].freeze
       ADMIN_FOOTER_COMMANDS = %i[status servers users setadmin].freeze
       ADMIN_COMMANDS = (ADMIN_WORK_COMMANDS + ADMIN_FOOTER_COMMANDS.drop(1)).freeze
-      TRANSIENT_COMMANDS = %w[/servers /users].freeze
+      TRANSIENT_COMMANDS = %w[/status /servers].freeze
 
       module_function
 
@@ -59,6 +110,8 @@ module ZeroXDA
     end
 
     module CommandMenuLocalization
+      include I18n::Helpers
+
       private
 
       def sync_commands(chat_id, user)
@@ -78,7 +131,7 @@ module ZeroXDA
         )
         return if target_chat_id.to_s == actor_chat_id.to_s
 
-        send_message(target_chat_id, "вам призначено роль admin ✅")
+        send_message(target_chat_id, t(:assigned_admin_notice, locale: Locale::DEFAULT))
       rescue TelegramAPI::Error => error
         warn "new admin menu sync failed: #{error.message}"
       end
