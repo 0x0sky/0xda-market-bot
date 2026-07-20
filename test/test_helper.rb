@@ -8,7 +8,9 @@ class FakeMarketAPI
               :product_requests,
               :product_locales,
               :price_proposal_requests,
-              :applied_prices
+              :applied_prices,
+              :fx_rate_requests,
+              :applied_fx_rates
 
   PRODUCTS = [
     ["premium_3m", "Premium 3m", "Telegram Premium 3 months", "Telegram Premium 3 міс.", "Premium 3 міс."],
@@ -29,6 +31,8 @@ class FakeMarketAPI
     @product_locales = []
     @price_proposal_requests = []
     @applied_prices = []
+    @fx_rate_requests = 0
+    @applied_fx_rates = []
   end
 
   def authenticate_telegram(user:, chat:)
@@ -107,6 +111,35 @@ class FakeMarketAPI
         "type" => "price",
         "id" => price.fetch(:sku),
         "attributes" => { "amount_usdt" => price.fetch(:amount_usdt) }
+      }
+    end
+  end
+
+  def fx_rates
+    @fx_rate_requests += 1
+    [["USDT", "1"], ["EUR", "1.16"]].map do |currency, value|
+      {
+        "type" => "fx_rate",
+        "id" => currency,
+        "attributes" => {
+          "currency" => currency,
+          "usdt_per_unit" => value,
+          "updated_at" => "2026-07-19T07:00:00.000000Z"
+        }
+      }
+    end
+  end
+
+  def set_fx_rates(actor_telegram_user_id:, rates:)
+    @applied_fx_rates << { actor_telegram_user_id: actor_telegram_user_id, rates: rates }
+    rates.map do |rate|
+      {
+        "type" => "fx_rate",
+        "id" => rate.fetch(:currency),
+        "attributes" => {
+          "currency" => rate.fetch(:currency),
+          "usdt_per_unit" => rate.fetch(:usdt_per_unit)
+        }
       }
     end
   end
