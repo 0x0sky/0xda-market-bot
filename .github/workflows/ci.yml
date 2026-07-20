@@ -20,15 +20,5 @@ jobs:
         with:
           ruby-version: 3.3.11
       - run: bundle install
-      - name: Run tests
-        shell: bash
-        run: |
-          set -o pipefail
-          bundle exec rake 2>&1 | tee test.log
-      - name: Upload test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-log
-          path: test.log
+      - run: bundle exec rake
       - run: docker build --tag 0xda-market-bot .
