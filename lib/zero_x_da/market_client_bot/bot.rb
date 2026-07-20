@@ -18,6 +18,7 @@ module ZeroXDA
       BUY_CALLBACK_PATTERN = /\Abuy_([a-z0-9][a-z0-9_-]{0,59})\z/
       APPLY_PRICE_CALLBACK_PATTERN = /\Aapplyprice_([a-z0-9][a-z0-9_-]{0,59})\z/
       PRICE_AMOUNT_PATTERN = /\A\d+(?:\.\d{1,6})?\z/
+      CURRENCY_INPUT_PATTERN = /\A[A-Za-z][A-Za-z0-9]{2,9}\z/
       PRICE_DIALOG_TTL = 600
       START_COMMANDS = [
         { command: "start", description: "авторизація" }
@@ -32,10 +33,12 @@ module ZeroXDA
         { command: "users", description: "активні користувачі" },
         { command: "setadmin", description: "призначити адміністратора" },
         { command: "apply_prices", description: "price application form" },
-        { command: "apply_price", description: "set product price (USDT)" }
+        { command: "apply_price", description: "set product price (USDT)" },
+        { command: "rates", description: "fx rates (USDT base)" },
+        { command: "set_rate", description: "set fx rate: CUR usdt_per_unit" }
       ].freeze
       SUPPORTED_COMMANDS = %w[
-        /start /status /buy /servers /users /setadmin /apply_prices /apply_price
+        /start /status /buy /servers /users /setadmin /apply_prices /apply_price /rates /set_rate
       ].freeze
 
       def initialize(
@@ -81,6 +84,10 @@ module ZeroXDA
               start_price_application(message)
             when "/apply_price"
               apply_single_price(message, argument)
+            when "/rates"
+              show_fx_rates(message)
+            when "/set_rate"
+              set_fx_rate(message, argument)
             end
           end
         elsif message["text"] && price_dialog_for(message)
@@ -338,6 +345,53 @@ module ZeroXDA
           send_message(chat_id, PriceMessages.product_not_found(reference, locale: locale))
           request_product_selection(chat_id: chat_id, user_id: user_id, locale: locale)
         end
+      end
+
+      # /rates — all fx rates in the USDT base with the buy-side semantics:
+      # how many USDT we pay for one unit of the currency.
+      def show_fx_rates(message)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+
+        rates = @market_api.fx_rates
+        lines = ["0xda-market / fx rates", "usdt paid per 1 unit (buy side)", ""]
+        rates.each do |rate|
+          attributes = rate.fetch("attributes")
+          lines << "#{attributes.fetch("currency")}: #{attributes.fetch("usdt_per_unit")}"
+        end
+        lines << ""
+        lines << "Set a rate: /set_rate <currency> <usdt per 1 unit>"
+        lines << "Example: /set_rate EUR 1.16"
+        send_message(chat_id, lines.join("\n"))
+      end
+
+      # /set_rate <currency> <usdt per 1 unit>
+      def set_fx_rate(message, argument)
+        chat_id = message.fetch("chat").fetch("id")
+        user = authenticate_user(message)
+        sync_commands(chat_id, user)
+        return send_message(chat_id, "доступ заборонено.") unless admin?(user)
+
+        currency, value = argument.to_s.split(/\s+/, 2)
+        value = value&.strip
+        unless currency&.match?(CURRENCY_INPUT_PATTERN) && value&.match?(PRICE_AMOUNT_PATTERN)
+          return send_message(
+            chat_id,
+            "format: /set_rate <currency> <usdt per 1 unit>\nexample: /set_rate EUR 1.16"
+          )
+        end
+
+        applied = @market_api.set_fx_rates(
+          actor_telegram_user_id: message.fetch("from").fetch("id"),
+          rates: [{ currency: currency.upcase, usdt_per_unit: value }]
+        )
+        rate = applied.first
+        send_message(
+          chat_id,
+          "rate applied ✅\n1 #{rate.fetch("id")} = #{rate.dig("attributes", "usdt_per_unit")} USDT"
+        )
       end
 
       def request_product_selection(chat_id:, user_id:, locale:)
