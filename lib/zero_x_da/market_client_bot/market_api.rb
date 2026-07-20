@@ -80,6 +80,18 @@ module ZeroXDA
         ).fetch("data")
       end
 
+      def fx_rates
+        get("v1/fx-rates", authenticated: true).fetch("data")
+      end
+
+      def set_fx_rates(actor_telegram_user_id:, rates:)
+        post(
+          "v1/admin/fx-rates",
+          actor_telegram_user_id: actor_telegram_user_id,
+          rates: rates
+        ).fetch("data")
+      end
+
       def set_admin(actor_telegram_user_id:, target:)
         post(
           "v1/admin/users/set-admin",
