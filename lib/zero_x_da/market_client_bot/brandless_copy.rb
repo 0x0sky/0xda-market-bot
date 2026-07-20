@@ -32,6 +32,18 @@ module ZeroXDA
       end
     end
 
+    module LocalizedLegacyCopy
+      include I18n::Helpers
+
+      private
+
+      def send_message(chat_id, text, reply_markup: nil)
+        localized_text = text == "доступ заборонено." ? t(:access_denied) : text
+        super(chat_id, localized_text, reply_markup: reply_markup)
+      end
+    end
+
     Bot.prepend(LocalizedServerStartNotice)
+    Bot.prepend(LocalizedLegacyCopy)
   end
 end
