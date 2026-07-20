@@ -37,7 +37,7 @@ class BotTest < Minitest::Test
     @bot.handle(update("/status"))
 
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "Роль: client"
+    assert_includes text, "role: client"
     assert_includes text, "status: active ✅"
     assert_equal 0, @market.health_requests
   end
@@ -101,7 +101,7 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_see_or_execute_servers
     @bot.handle(update("/servers"))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_equal 0, @market.health_requests
     assert_equal %w[buy status], @telegram.command_sets.last.fetch(:commands).map { |item| item.fetch(:command) }
   end
@@ -119,7 +119,7 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_list_active_users
     @bot.handle(update("/users", user_id: 88))
 
-    assert_equal "доступ заборонено.", @telegram.messages.first.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.first.fetch(:text)
   end
 
   def test_admin_menu_contains_work_commands_then_fixed_footer
@@ -147,7 +147,7 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_execute_a_manually_typed_setadmin_command
     @bot.handle(update("/setadmin 88", user_id: 77, chat_id: 770))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     refute @market.requests.any? { |request| request.key?(:actor_telegram_user_id) }
     command_set = @telegram.command_sets.last
     assert_equal %w[buy status], command_set.fetch(:commands).map { |item| item.fetch(:command) }
@@ -181,7 +181,7 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_request_the_price_application_form
     @bot.handle(update("/apply_prices"))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_empty @market.price_proposal_requests
   end
 
@@ -301,7 +301,7 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_apply_a_price
     @bot.handle(update("/apply_price premium_6m 7.45"))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_empty @market.applied_prices
   end
 
@@ -343,12 +343,12 @@ class BotTest < Minitest::Test
   def test_non_admin_cannot_manage_fx_rates
     @bot.handle(update("/rates"))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_equal 0, @market.fx_rate_requests
 
     @bot.handle(update("/set_rate EUR 1.16"))
 
-    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal "Доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_empty @market.applied_fx_rates
   end
 
