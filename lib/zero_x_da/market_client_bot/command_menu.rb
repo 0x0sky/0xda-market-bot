@@ -7,33 +7,34 @@ module ZeroXDA
     module CommandMenu
       COPY = {
         "en_US" => {
-          start: "authorization",
-          buy: "buy",
-          status: "account status",
-          servers: "server status",
-          users: "active users",
-          setadmin: "assign administrator",
-          apply_prices: "apply prices",
-          apply_price: "set product price (USDT)",
-          rates: "exchange rates (USDT base)",
-          set_rate: "set exchange rate"
+          start: "🔐 authorization",
+          buy: "🛍️ buy",
+          status: "👤 account status",
+          apply_prices: "📦 apply prices",
+          apply_price: "💰 set product price (USDT)",
+          rates: "💱 exchange rates (USDT base)",
+          set_rate: "⚙️ set exchange rate",
+          users: "👥 active users",
+          servers: "📊 server status",
+          setadmin: "🔑 assign administrator"
         },
         "uk_UA" => {
-          start: "авторизація",
-          buy: "купити",
-          status: "власний статус",
-          servers: "стан серверів",
-          users: "активні користувачі",
-          setadmin: "призначити адміністратора",
-          apply_prices: "застосувати ціни",
-          apply_price: "встановити ціну продукту",
-          rates: "курси валют відносно USDT",
-          set_rate: "встановити курс валюти"
+          start: "🔐 авторизація",
+          buy: "🛍️ купити",
+          status: "👤 власний статус",
+          apply_prices: "📦 застосувати ціни",
+          apply_price: "💰 встановити ціну продукту",
+          rates: "💱 курси валют відносно USDT",
+          set_rate: "⚙️ встановити курс валюти",
+          users: "👥 активні користувачі",
+          servers: "📊 стан серверів",
+          setadmin: "🔑 призначити адміністратора"
         }
       }.freeze
 
       CLIENT_COMMANDS = %i[buy status].freeze
       ADMIN_COMMANDS = %i[servers users setadmin apply_prices apply_price rates set_rate].freeze
+      TRANSIENT_COMMANDS = ([:status] + ADMIN_COMMANDS).map { |name| "/#{name}" }.freeze
 
       module_function
 
@@ -81,6 +82,29 @@ module ZeroXDA
       end
     end
 
+    module TransientUserCommands
+      def handle(update)
+        super
+      ensure
+        delete_transient_user_command(update["message"])
+      end
+
+      private
+
+      def delete_transient_user_command(message)
+        return unless message
+
+        command = message["text"].to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s|\z)})&.[](1)&.downcase
+        return unless CommandMenu::TRANSIENT_COMMANDS.include?(command)
+
+        chat_id = message.dig("chat", "id")
+        message_id = message["message_id"]
+        return unless chat_id && message_id
+
+        schedule_message_deletion(chat_id, { "message_id" => message_id })
+      end
+    end
+
     module TelegramUpdateLocale
       def handle(update)
         language_code = update.dig("message", "from", "language_code") ||
@@ -93,6 +117,7 @@ module ZeroXDA
     end
 
     Bot.prepend(CommandMenuLocalization)
+    Bot.prepend(TransientUserCommands)
     Bot.prepend(TelegramUpdateLocale)
   end
 end
