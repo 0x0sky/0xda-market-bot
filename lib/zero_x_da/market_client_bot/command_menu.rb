@@ -10,31 +10,33 @@ module ZeroXDA
           start: "🔐 authorization",
           buy: "🛍️ buy",
           status: "👤 account status",
-          servers: "📊 control · server status",
-          users: "👥 control · active users",
-          setadmin: "🔑 access · assign administrator",
-          apply_prices: "📦 prices · apply all",
-          apply_price: "💰 prices · set product price",
-          rates: "💱 rates · view USDT base",
-          set_rate: "⚙️ rates · set exchange rate"
+          servers: "📊 server status",
+          users: "👥 active users",
+          setadmin: "🔑 assign administrator",
+          apply_prices: "📦 apply prices",
+          apply_price: "💰 set product price",
+          rates: "💱 exchange rates (USDT base)",
+          set_rate: "⚙️ set exchange rate"
         },
         "uk_UA" => {
           start: "🔐 авторизація",
           buy: "🛍️ купити",
           status: "👤 власний статус",
-          servers: "📊 контроль · стан серверів",
-          users: "👥 контроль · активні користувачі",
-          setadmin: "🔑 доступ · призначити адміністратора",
-          apply_prices: "📦 ціни · застосувати всі",
-          apply_price: "💰 ціни · встановити для продукту",
-          rates: "💱 курси · переглянути відносно USDT",
-          set_rate: "⚙️ курси · встановити курс"
+          servers: "📊 стан серверів",
+          users: "👥 активні користувачі",
+          setadmin: "🔑 призначити адміністратора",
+          apply_prices: "📦 застосувати ціни",
+          apply_price: "💰 встановити ціну продукту",
+          rates: "💱 курси валют відносно USDT",
+          set_rate: "⚙️ встановити курс валюти"
         }
       }.freeze
 
       CLIENT_COMMANDS = %i[buy status].freeze
-      ADMIN_COMMANDS = %i[servers users setadmin apply_prices apply_price rates set_rate].freeze
-      TRANSIENT_COMMANDS = ([:status] + ADMIN_COMMANDS).map { |name| "/#{name}" }.freeze
+      ADMIN_WORK_COMMANDS = %i[apply_prices apply_price rates set_rate].freeze
+      ADMIN_FOOTER_COMMANDS = %i[status servers users setadmin].freeze
+      ADMIN_COMMANDS = (ADMIN_WORK_COMMANDS + ADMIN_FOOTER_COMMANDS.drop(1)).freeze
+      TRANSIENT_COMMANDS = %w[/servers /users].freeze
 
       module_function
 
@@ -47,7 +49,7 @@ module ZeroXDA
       end
 
       def admin(locale: Locale::DEFAULT)
-        commands_for(CLIENT_COMMANDS + ADMIN_COMMANDS, locale: locale)
+        commands_for([:buy] + ADMIN_WORK_COMMANDS + ADMIN_FOOTER_COMMANDS, locale: locale)
       end
 
       def commands_for(names, locale:)
@@ -89,14 +91,14 @@ module ZeroXDA
         message = update["message"]
         command = transient_command(message)
         previous_context = Thread.current[CONTEXT_KEY]
-        context = command && { command: command, messages: [] }
+        context = command && { messages: [] }
         Thread.current[CONTEXT_KEY] = context if context
 
         super
       ensure
         if context
           schedule_incoming_command_deletion(message)
-          schedule_admin_response_deletions(context) unless command == "/status"
+          schedule_response_deletions(context)
           Thread.current[CONTEXT_KEY] = previous_context
         end
       end
@@ -104,9 +106,7 @@ module ZeroXDA
       def send_message(chat_id, text, reply_markup: nil)
         message = super
         context = Thread.current[CONTEXT_KEY]
-        if context && context.fetch(:command) != "/status"
-          context.fetch(:messages) << [chat_id, message]
-        end
+        context&.fetch(:messages)&.push([chat_id, message])
         message
       end
 
@@ -129,7 +129,7 @@ module ZeroXDA
         schedule_message_deletion(chat_id, { "message_id" => message_id })
       end
 
-      def schedule_admin_response_deletions(context)
+      def schedule_response_deletions(context)
         context.fetch(:messages).each do |chat_id, message|
           schedule_message_deletion(chat_id, message)
         end
