@@ -10,25 +10,25 @@ module ZeroXDA
           start: "🔐 authorization",
           buy: "🛍️ buy",
           status: "👤 account status",
-          apply_prices: "🛠️ 📦 apply prices",
-          apply_price: "🛠️ 💰 set product price (USDT)",
-          rates: "🛠️ 💱 exchange rates (USDT base)",
-          set_rate: "🛠️ ⚙️ set exchange rate",
-          users: "🛠️ 👥 active users",
-          servers: "🛠️ 📊 server status",
-          setadmin: "🛠️ 🔑 assign administrator"
+          servers: "📊 control · server status",
+          users: "👥 control · active users",
+          setadmin: "🔑 access · assign administrator",
+          apply_prices: "📦 prices · apply all",
+          apply_price: "💰 prices · set product price",
+          rates: "💱 rates · view USDT base",
+          set_rate: "⚙️ rates · set exchange rate"
         },
         "uk_UA" => {
           start: "🔐 авторизація",
           buy: "🛍️ купити",
           status: "👤 власний статус",
-          apply_prices: "🛠️ 📦 застосувати ціни",
-          apply_price: "🛠️ 💰 встановити ціну продукту",
-          rates: "🛠️ 💱 курси валют відносно USDT",
-          set_rate: "🛠️ ⚙️ встановити курс валюти",
-          users: "🛠️ 👥 активні користувачі",
-          servers: "🛠️ 📊 стан серверів",
-          setadmin: "🛠️ 🔑 призначити адміністратора"
+          servers: "📊 контроль · стан серверів",
+          users: "👥 контроль · активні користувачі",
+          setadmin: "🔑 доступ · призначити адміністратора",
+          apply_prices: "📦 ціни · застосувати всі",
+          apply_price: "💰 ціни · встановити для продукту",
+          rates: "💱 курси · переглянути відносно USDT",
+          set_rate: "⚙️ курси · встановити курс"
         }
       }.freeze
 
@@ -83,27 +83,56 @@ module ZeroXDA
     end
 
     module TransientUserCommands
+      CONTEXT_KEY = "zero_xda_market_client_bot_transient_command"
+
       def handle(update)
+        message = update["message"]
+        command = transient_command(message)
+        previous_context = Thread.current[CONTEXT_KEY]
+        context = command && { command: command, messages: [] }
+        Thread.current[CONTEXT_KEY] = context if context
+
         super
       ensure
-        delete_transient_user_command(update["message"])
+        if context
+          schedule_incoming_command_deletion(message)
+          schedule_admin_response_deletions(context) unless command == "/status"
+          Thread.current[CONTEXT_KEY] = previous_context
+        end
       end
+
+      def send_message(chat_id, text, reply_markup: nil)
+        message = super
+        context = Thread.current[CONTEXT_KEY]
+        if context && context.fetch(:command) != "/status"
+          context.fetch(:messages) << [chat_id, message]
+        end
+        message
+      end
+
+      private :send_message
 
       private
 
-      def delete_transient_user_command(message)
+      def transient_command(message)
         return unless message
 
         command = message["text"].to_s.match(%r{\A(/\w+)(?:@\w+)?(?:\s|\z)})&.[](1)&.downcase
-        return unless CommandMenu::TRANSIENT_COMMANDS.include?(command)
+        command if CommandMenu::TRANSIENT_COMMANDS.include?(command)
+      end
 
-        chat_id = message.dig("chat", "id")
-        message_id = message["message_id"]
+      def schedule_incoming_command_deletion(message)
+        chat_id = message&.dig("chat", "id")
+        message_id = message&.fetch("message_id", nil)
         return unless chat_id && message_id
 
-        @telegram_api.delete_message(chat_id: chat_id, message_id: message_id)
-      rescue TelegramAPI::Error => error
-        warn "user command deletion failed: #{error.message}"
+        schedule_message_deletion(chat_id, { "message_id" => message_id })
+      end
+
+      def schedule_admin_response_deletions(context)
+        context.fetch(:messages).each do |chat_id, message|
+          schedule_message_deletion(chat_id, message)
+        end
       end
     end
 
