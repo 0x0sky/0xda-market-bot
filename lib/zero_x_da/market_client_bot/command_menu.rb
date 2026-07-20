@@ -55,11 +55,11 @@ module ZeroXDA
       end
     end
 
-    class Bot
+    module CommandMenuLocalization
       private
 
       def sync_commands(chat_id, user)
-        locale = user.dig("attributes", "locale") || Locale::DEFAULT
+        locale = user.dig("attributes", "locale") || @telegram_update_locale || Locale::DEFAULT
         commands = admin?(user) ? CommandMenu.admin(locale: locale) : CommandMenu.client(locale: locale)
         @telegram_api.set_commands(commands, scope: { type: "chat", chat_id: chat_id })
       rescue TelegramAPI::Error => error
@@ -80,5 +80,19 @@ module ZeroXDA
         warn "new admin menu sync failed: #{error.message}"
       end
     end
+
+    module TelegramUpdateLocale
+      def handle(update)
+        language_code = update.dig("message", "from", "language_code") ||
+                        update.dig("callback_query", "from", "language_code")
+        @telegram_update_locale = Locale.resolve(language_code)
+        super
+      ensure
+        @telegram_update_locale = nil
+      end
+    end
+
+    Bot.prepend(CommandMenuLocalization)
+    Bot.prepend(TelegramUpdateLocale)
   end
 end
