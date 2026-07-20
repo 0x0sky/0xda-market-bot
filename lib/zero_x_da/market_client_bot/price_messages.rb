@@ -7,7 +7,7 @@ module ZeroXDA
     module PriceMessages
       COPY = {
         "en_US" => {
-          title: "0xda-market / price application",
+          title: "📦 Price application",
           base_currency: "base currency: USDT",
           previous: "yesterday",
           current: "current",
@@ -25,7 +25,7 @@ module ZeroXDA
                              "enter a sku, position or short name, or pick a product button"
         },
         "uk_UA" => {
-          title: "0xda-market / застосування цін",
+          title: "📦 Застосування цін",
           base_currency: "базова валюта: USDT",
           previous: "вчора",
           current: "поточна",
