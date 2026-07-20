@@ -122,15 +122,14 @@ class BotTest < Minitest::Test
     assert_equal "доступ заборонено.", @telegram.messages.first.fetch(:text)
   end
 
-  def test_admin_menu_contains_only_admin_scoped_commands
+  def test_admin_menu_contains_work_commands_then_fixed_footer
     @bot.handle(update("/start", user_id: 99, chat_id: 990))
 
     command_set = @telegram.command_sets.last
     assert_equal({ type: "chat", chat_id: 990 }, command_set.fetch(:scope))
-    commands = command_set.fetch(:commands).map do |item|
-      item.fetch(:command)
-    end
-    assert_equal %w[buy status servers users setadmin apply_prices apply_price rates set_rate], commands
+    commands = command_set.fetch(:commands).map { |item| item.fetch(:command) }
+    assert_equal %w[buy apply_prices apply_price rates set_rate status servers users setadmin], commands
+    assert_equal %w[status servers users setadmin], commands.last(4)
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
@@ -171,9 +170,7 @@ class BotTest < Minitest::Test
   end
 
   def test_price_application_falls_back_to_en_us
-    @bot.handle(
-      update("/apply_prices", user_id: 99, chat_id: 990, language_code: "fr")
-    )
+    @bot.handle(update("/apply_prices", user_id: 99, chat_id: 990, language_code: "fr"))
 
     assert_equal "en_US", @market.price_proposal_requests.last.fetch(:locale)
     text = @telegram.messages.last.fetch(:text)
@@ -210,9 +207,7 @@ class BotTest < Minitest::Test
   end
 
   def test_admin_applies_a_single_price_by_database_short_name
-    @bot.handle(
-      update("/apply_price Premium 6m 7.45", user_id: 99, chat_id: 990)
-    )
+    @bot.handle(update("/apply_price Premium 6m 7.45", user_id: 99, chat_id: 990))
 
     price = @market.applied_prices.last.fetch(:prices).first
     assert_equal "premium_6m", price.fetch(:sku)

@@ -13,35 +13,31 @@ class CommandMenuTest < Minitest::Test
     ], CommandMenu.start(locale: "uk_UA")
   end
 
-  def test_ukrainian_admin_menu_uses_grouped_descriptions_and_expected_order
+  def test_admin_menu_keeps_four_footer_commands_last
     menu = CommandMenu.admin(locale: "uk_UA")
 
     assert_equal %w[
-      buy status servers users setadmin apply_prices apply_price rates set_rate
+      buy apply_prices apply_price rates set_rate status servers users setadmin
     ], menu.map { |item| item.fetch(:command) }
+    assert_equal %w[status servers users setadmin], menu.last(4).map { |item| item.fetch(:command) }
     assert_equal [
-      "🛍️ купити",
       "👤 власний статус",
-      "📊 контроль · стан серверів",
-      "👥 контроль · активні користувачі",
-      "🔑 доступ · призначити адміністратора",
-      "📦 ціни · застосувати всі",
-      "💰 ціни · встановити для продукту",
-      "💱 курси · переглянути відносно USDT",
-      "⚙️ курси · встановити курс"
-    ], menu.map { |item| item.fetch(:description) }
+      "📊 стан серверів",
+      "👥 активні користувачі",
+      "🔑 призначити адміністратора"
+    ], menu.last(4).map { |item| item.fetch(:description) }
   end
 
-  def test_unknown_locale_falls_back_to_english_with_groups
+  def test_unknown_locale_falls_back_to_english
     descriptions = CommandMenu.admin(locale: "fr_FR").to_h do |item|
       [item.fetch(:command), item.fetch(:description)]
     end
 
-    assert_equal "📦 prices · apply all", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ rates · set exchange rate", descriptions.fetch("set_rate")
+    assert_equal "📦 apply prices", descriptions.fetch("apply_prices")
+    assert_equal "⚙️ set exchange rate", descriptions.fetch("set_rate")
   end
 
-  def test_client_menu_does_not_include_admin_commands
+  def test_client_menu_keeps_buy_and_status
     menu = CommandMenu.client(locale: "uk_UA")
 
     assert_equal %w[buy status], menu.map { |item| item.fetch(:command) }
@@ -56,8 +52,8 @@ class CommandMenuTest < Minitest::Test
     bot.handle(update(command: "/status", language_code: "uk", message_id: 77))
 
     descriptions = command_descriptions(telegram)
-    assert_equal "📦 ціни · застосувати всі", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ курси · встановити курс", descriptions.fetch("set_rate")
+    assert_equal "📦 застосувати ціни", descriptions.fetch("apply_prices")
+    assert_equal "⚙️ встановити курс валюти", descriptions.fetch("set_rate")
   end
 
   def test_persisted_locale_has_priority_over_telegram_language
@@ -72,46 +68,39 @@ class CommandMenuTest < Minitest::Test
     bot.handle(update(command: "/status", language_code: "uk", message_id: 78))
 
     descriptions = command_descriptions(telegram)
-    assert_equal "📦 prices · apply all", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ rates · set exchange rate", descriptions.fetch("set_rate")
+    assert_equal "📦 apply prices", descriptions.fetch("apply_prices")
+    assert_equal "⚙️ set exchange rate", descriptions.fetch("set_rate")
   end
 
-  def test_status_deletes_user_command_and_bot_status_message_together
-    telegram = FakeTelegramAPI.new
-    bot = build_bot(telegram: telegram)
-
-    bot.handle(update(command: "/status", message_id: 501))
-
-    assert_includes telegram.deleted_messages, { chat_id: 990, message_id: 501 }
-    assert_includes telegram.deleted_messages, { chat_id: 990, message_id: 1 }
-  end
-
-  def test_each_admin_command_deletes_command_and_all_bot_responses
-    CommandMenu::ADMIN_COMMANDS.each_with_index do |name, index|
+  def test_servers_and_users_delete_command_and_bot_responses
+    %w[servers users].each_with_index do |name, index|
       telegram = FakeTelegramAPI.new
       bot = build_bot(telegram: telegram)
       message_id = 600 + index
 
       bot.handle(update(command: "/#{name}", message_id: message_id))
 
-      assert_includes telegram.deleted_messages, { chat_id: 990, message_id: message_id }, name.to_s
+      assert_includes telegram.deleted_messages, { chat_id: 990, message_id: message_id }, name
       telegram.messages.each do |message|
         assert_includes(
           telegram.deleted_messages,
           { chat_id: message.fetch(:chat_id), message_id: message.fetch("message_id") },
-          name.to_s
+          name
         )
       end
     end
   end
 
-  def test_regular_client_command_is_not_deleted
-    telegram = FakeTelegramAPI.new
-    bot = build_bot(telegram: telegram)
+  def test_other_commands_are_not_deleted
+    %w[status setadmin apply_prices apply_price rates set_rate buy].each_with_index do |name, index|
+      telegram = FakeTelegramAPI.new
+      bot = build_bot(telegram: telegram)
+      message_id = 700 + index
 
-    bot.handle(update(command: "/buy", message_id: 700))
+      bot.handle(update(command: command_for(name), message_id: message_id))
 
-    refute_includes telegram.deleted_messages, { chat_id: 990, message_id: 700 }
+      refute_includes telegram.deleted_messages, { chat_id: 990, message_id: message_id }, name
+    end
   end
 
   private
@@ -122,6 +111,15 @@ class CommandMenuTest < Minitest::Test
       telegram_api: telegram,
       status_message_ttl: status_message_ttl
     )
+  end
+
+  def command_for(name)
+    case name
+    when "setadmin" then "/setadmin 88"
+    when "apply_price" then "/apply_price premium_6m 7.45"
+    when "set_rate" then "/set_rate EUR 1.16"
+    else "/#{name}"
+    end
   end
 
   def update(command:, language_code: "uk", message_id:)
