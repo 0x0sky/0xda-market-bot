@@ -2,6 +2,7 @@
 
 require_relative "locale"
 require_relative "admin_messages"
+require_relative "brandless_copy"
 
 module ZeroXDA
   module MarketClientBot
