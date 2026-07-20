@@ -130,7 +130,7 @@ class BotTest < Minitest::Test
     commands = command_set.fetch(:commands).map do |item|
       item.fetch(:command)
     end
-    assert_equal %w[buy status servers users setadmin apply_prices apply_price], commands
+    assert_equal %w[buy status servers users setadmin apply_prices apply_price rates set_rate], commands
   end
 
   def test_admin_promotes_a_user_and_installs_their_admin_menu
@@ -308,6 +308,53 @@ class BotTest < Minitest::Test
 
     assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
     assert_empty @market.applied_prices
+  end
+
+  def test_admin_can_list_fx_rates
+    @bot.handle(update("/rates", user_id: 99, chat_id: 990))
+
+    assert_equal 1, @market.fx_rate_requests
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "0xda-market / fx rates"
+    assert_includes text, "USDT: 1"
+    assert_includes text, "EUR: 1.16"
+    assert_includes text, "/set_rate <currency> <usdt per 1 unit>"
+  end
+
+  def test_admin_sets_an_fx_rate_with_uppercased_currency
+    @bot.handle(update("/set_rate eur 1.16", user_id: 99, chat_id: 990))
+
+    assert_equal(
+      [{ actor_telegram_user_id: 99, rates: [{ currency: "EUR", usdt_per_unit: "1.16" }] }],
+      @market.applied_fx_rates
+    )
+    text = @telegram.messages.last.fetch(:text)
+    assert_includes text, "rate applied ✅"
+    assert_includes text, "1 EUR = 1.16 USDT"
+  end
+
+  def test_set_rate_with_malformed_arguments_shows_usage
+    @bot.handle(update("/set_rate EUR abc", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "format: /set_rate"
+    assert_empty @market.applied_fx_rates
+
+    @bot.handle(update("/set_rate", user_id: 99, chat_id: 990))
+
+    assert_includes @telegram.messages.last.fetch(:text), "format: /set_rate"
+    assert_empty @market.applied_fx_rates
+  end
+
+  def test_non_admin_cannot_manage_fx_rates
+    @bot.handle(update("/rates"))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_equal 0, @market.fx_rate_requests
+
+    @bot.handle(update("/set_rate EUR 1.16"))
+
+    assert_equal "доступ заборонено.", @telegram.messages.last.fetch(:text)
+    assert_empty @market.applied_fx_rates
   end
 
   def test_ignores_unknown_messages
