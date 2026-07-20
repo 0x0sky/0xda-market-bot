@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "locale"
+require_relative "admin_messages"
 
 module ZeroXDA
   module MarketClientBot
