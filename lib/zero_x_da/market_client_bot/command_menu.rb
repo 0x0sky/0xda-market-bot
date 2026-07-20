@@ -36,7 +36,7 @@ module ZeroXDA
       ADMIN_WORK_COMMANDS = %i[apply_prices apply_price rates set_rate].freeze
       ADMIN_FOOTER_COMMANDS = %i[status servers users setadmin].freeze
       ADMIN_COMMANDS = (ADMIN_WORK_COMMANDS + ADMIN_FOOTER_COMMANDS.drop(1)).freeze
-      TRANSIENT_COMMANDS = %w[/servers /users].freeze
+      TRANSIENT_COMMANDS = %w[/status /servers].freeze
 
       module_function
 
