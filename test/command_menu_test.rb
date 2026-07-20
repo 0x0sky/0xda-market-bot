@@ -22,13 +22,13 @@ class CommandMenuTest < Minitest::Test
     assert_equal [
       "🛍️ купити",
       "👤 власний статус",
-      "📊 стан серверів",
-      "👥 активні користувачі",
-      "🔑 призначити адміністратора",
-      "📦 застосувати ціни",
-      "💰 встановити ціну продукту",
-      "💱 курси валют відносно USDT",
-      "⚙️ встановити курс валюти"
+      "🛠️ 📊 стан серверів",
+      "🛠️ 👥 активні користувачі",
+      "🛠️ 🔑 призначити адміністратора",
+      "🛠️ 📦 застосувати ціни",
+      "🛠️ 💰 встановити ціну продукту",
+      "🛠️ 💱 курси валют відносно USDT",
+      "🛠️ ⚙️ встановити курс валюти"
     ], menu.map { |item| item.fetch(:description) }
   end
 
@@ -37,8 +37,8 @@ class CommandMenuTest < Minitest::Test
       [item.fetch(:command), item.fetch(:description)]
     end
 
-    assert_equal "📦 apply prices", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ set exchange rate", descriptions.fetch("set_rate")
+    assert_equal "🛠️ 📦 apply prices", descriptions.fetch("apply_prices")
+    assert_equal "🛠️ ⚙️ set exchange rate", descriptions.fetch("set_rate")
   end
 
   def test_client_menu_does_not_include_admin_commands
@@ -56,8 +56,8 @@ class CommandMenuTest < Minitest::Test
     bot.handle(update(command: "/status", language_code: "uk", message_id: 77))
 
     descriptions = command_descriptions(telegram)
-    assert_equal "📦 застосувати ціни", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ встановити курс валюти", descriptions.fetch("set_rate")
+    assert_equal "🛠️ 📦 застосувати ціни", descriptions.fetch("apply_prices")
+    assert_equal "🛠️ ⚙️ встановити курс валюти", descriptions.fetch("set_rate")
   end
 
   def test_persisted_locale_has_priority_over_telegram_language
@@ -72,8 +72,8 @@ class CommandMenuTest < Minitest::Test
     bot.handle(update(command: "/status", language_code: "uk", message_id: 78))
 
     descriptions = command_descriptions(telegram)
-    assert_equal "📦 apply prices", descriptions.fetch("apply_prices")
-    assert_equal "⚙️ set exchange rate", descriptions.fetch("set_rate")
+    assert_equal "🛠️ 📦 apply prices", descriptions.fetch("apply_prices")
+    assert_equal "🛠️ ⚙️ set exchange rate", descriptions.fetch("set_rate")
   end
 
   def test_status_deletes_user_command_and_bot_status_message
