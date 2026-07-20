@@ -17,18 +17,18 @@ class CommandMenuTest < Minitest::Test
     menu = CommandMenu.admin(locale: "uk_UA")
 
     assert_equal %w[
-      buy status apply_prices apply_price rates set_rate users servers setadmin
+      buy status servers users setadmin apply_prices apply_price rates set_rate
     ], menu.map { |item| item.fetch(:command) }
     assert_equal [
       "🛍️ купити",
       "👤 власний статус",
+      "📊 стан серверів",
+      "👥 активні користувачі",
+      "🔑 призначити адміністратора",
       "📦 застосувати ціни",
       "💰 встановити ціну продукту",
       "💱 курси валют відносно USDT",
-      "⚙️ встановити курс валюти",
-      "👥 активні користувачі",
-      "📊 стан серверів",
-      "🔑 призначити адміністратора"
+      "⚙️ встановити курс валюти"
     ], menu.map { |item| item.fetch(:description) }
   end
 
