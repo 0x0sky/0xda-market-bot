@@ -8,7 +8,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -16,43 +16,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-      - name: Apply final bot test fixes
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          ruby <<'RUBY'
-          path = "test/bot_test.rb"
-          content = File.read(path)
-          content = content.gsub('"доступ заборонено."', '"Доступ заборонено."')
-          content = content.sub(
-            /(def test_status_displays_the_current_user_state.*?assert_includes text, )"Роль: client"/m,
-            '\\1"role: client"'
-          )
-          File.write(path, content)
-          RUBY
-
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add test/bot_test.rb
-            git commit -m "test: align access-denied and status assertions"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          fi
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.3.11
       - run: bundle install
-      - name: Run tests
-        shell: bash
-        run: |
-          set -o pipefail
-          bundle exec rake 2>&1 | tee test.log
-      - name: Upload test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-log
-          path: test.log
+      - run: bundle exec rake
       - run: docker build --tag 0xda-market-bot .
