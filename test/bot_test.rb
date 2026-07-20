@@ -84,7 +84,7 @@ class BotTest < Minitest::Test
     bot.handle(update("/status"))
 
     text = @telegram.messages.last.fetch(:text)
-    assert_includes text, "Роль: client"
+    assert_includes text, "role: client"
     refute_includes text, "role: broker"
   end
 
@@ -141,7 +141,7 @@ class BotTest < Minitest::Test
     command_set = @telegram.command_sets.last
     assert_equal({ type: "chat", chat_id: "880" }, command_set.fetch(:scope))
     assert_includes command_set.fetch(:commands).map { |item| item.fetch(:command) }, "setadmin"
-    assert_includes @telegram.messages.last.fetch(:text), "Адміністратора призначено"
+    assert_includes @telegram.messages.last.fetch(:text), "Вам призначено роль admin"
   end
 
   def test_non_admin_cannot_execute_a_manually_typed_setadmin_command
