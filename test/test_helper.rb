@@ -40,7 +40,11 @@ class FakeMarketAPI
     role = user.fetch("id").to_s == "99" ? "admin" : "client"
     {
       "id" => "12345678-1234-4000-8000-123456789012",
-      "attributes" => { "role" => role, "status" => "active" }
+      "attributes" => {
+        "role" => role,
+        "status" => "active",
+        "telegram_username" => user["username"]
+      }
     }
   end
 
@@ -55,6 +59,7 @@ class FakeMarketAPI
         "id" => "12345678-1234-4000-8000-123456789012",
         "attributes" => {
           "telegram_user_id" => "77",
+          "telegram_username" => "zero",
           "role" => "client",
           "status" => "active",
           "locale" => "uk_UA"
@@ -153,6 +158,7 @@ class FakeMarketAPI
       "id" => "87654321-4321-4000-8000-210987654321",
       "attributes" => {
         "telegram_user_id" => "88",
+        "telegram_username" => "target_user",
         "telegram_chat_id" => "880",
         "role" => "admin",
         "status" => "active"
