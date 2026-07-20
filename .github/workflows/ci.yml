@@ -8,7 +8,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -16,77 +16,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-      - name: Apply one-time PR test fixes
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          ruby <<'RUBY'
-          replacements = {
-            "lib/zero_x_da/market_client_bot/admin_messages.rb" => {
-              "candidate.bytesize > MESSAGE_LIMIT" => "candidate.bytesize > Bot::MESSAGE_LIMIT"
-            },
-            "test/bot_test.rb" => {
-              'assert_includes text, "market core: ok ✅"' => 'assert_includes text, "✅ Market core"',
-              'assert_includes text, "core time: 2026-07-12T00:00:00.000000Z"' => 'assert_includes text, "12.07.2026 · 00:00:00 UTC"',
-              'assert_includes text, "client bot: ok ✅"' => 'assert_includes text, "✅ Client bot"',
-              'assert_includes text, "bot time: 2026-07-12T00:00:01.000000Z"' => 'assert_includes text, "12.07.2026 · 00:00:01 UTC"',
-              'assert_includes text, "active users: 1"' => 'assert_includes text, "👥 Активні користувачі: 1"',
-              'assert_includes text, "telegram: 77"' => 'assert_includes text, "👤 @zero"',
-              'assert_includes text, "uuid: 12345678-1234-4000-8000-123456789012"' => 'refute_includes text, "12345678-1234-4000-8000-123456789012"',
-              'assert_includes text, "role: client"' => 'assert_includes text, "Роль: client"',
-              'assert_includes @telegram.messages.last.fetch(:text), "admin призначений"' => 'assert_includes @telegram.messages.last.fetch(:text), "Адміністратора призначено"',
-              'assert_includes text, "0xda-market / застосування цін"' => 'assert_includes text, "📦 Застосування цін"',
-              'assert_includes text, "базова валюта: USDT"' => 'assert_includes text, "💵 USDT"',
-              'assert_includes text, "1. Telegram Premium 3 міс. (premium_3m)"' => 'assert_includes text, "1. Telegram Premium 3 міс. · premium_3m"',
-              'assert_includes text, "вчора: 7.20 · поточна: 7.45"' => 'assert_includes text, "⏮ 7.20 → 💰 7.45 USDT"',
-              'assert_includes text, "редактор: 12345678-1234-4000-8000-123456789012"' => 'assert_includes text, "✏️ @zero"',
-              'assert_includes text, "/apply_price <sku|позиція|коротка назва> <сума в USDT>"' => 'assert_includes text, "/apply_price <sku|позиція|назва> <сума>"',
-              'assert_equal "en_US", @market.price_proposal_requests.last.fetch(:locale)' => 'assert_equal "fr_FR", @market.price_proposal_requests.last.fetch(:locale)',
-              'assert_includes text, "0xda-market / price application"' => 'assert_includes text, "📦 Application des prix"',
-              'assert_includes text, "1. Telegram Premium 3 months (premium_3m)"' => 'assert_includes text, "1. Telegram Premium 3 months · premium_3m"',
-              'assert_includes text, "0xda-market / fx rates"' => 'assert_includes text, "💱 Курси валют"',
-              'assert_includes text, "USDT: 1"' => 'assert_includes text, "1 USDT = 1 USDT"',
-              'assert_includes text, "EUR: 1.16"' => 'assert_includes text, "1 EUR = 1.16 USDT"',
-              'assert_includes text, "/set_rate <currency> <usdt per 1 unit>"' => 'assert_includes text, "/set_rate"',
-              'assert_includes @telegram.messages.first.fetch(:text), "market core: ok"' => 'assert_includes @telegram.messages.first.fetch(:text), "✅ Market core"',
-              'assert_equal "0xda-market запускається…", @telegram.messages.first.fetch(:text)' => 'assert_equal "Сервер запускається…", @telegram.messages.first.fetch(:text)'
-            },
-            "test/price_digest_test.rb" => {
-              'assert_includes text, "застосування цін"' => 'assert_includes text, "Застосування цін"'
-            }
-          }
-
-          replacements.each do |path, pairs|
-            content = File.read(path)
-            pairs.each do |from, to|
-              content = content.gsub(from, to)
-            end
-            File.write(path, content)
-          end
-          RUBY
-
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add lib/zero_x_da/market_client_bot/admin_messages.rb test/bot_test.rb test/price_digest_test.rb
-            git commit -m "test: align assertions with localized admin output"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          fi
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.3.11
       - run: bundle install
-      - name: Run tests
-        shell: bash
-        run: |
-          set -o pipefail
-          bundle exec rake 2>&1 | tee test.log
-      - name: Upload test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-log
-          path: test.log
+      - run: bundle exec rake
       - run: docker build --tag 0xda-market-bot .
