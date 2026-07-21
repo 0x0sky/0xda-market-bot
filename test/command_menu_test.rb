@@ -17,9 +17,9 @@ class CommandMenuTest < Minitest::Test
     menu = CommandMenu.admin(locale: "uk_UA")
 
     assert_equal %w[
-      buy apply_prices apply_price rates set_rate status servers users setadmin
+      buy apply_prices apply_price rates set_rate status servers users set_admin
     ], menu.map { |item| item.fetch(:command) }
-    assert_equal %w[status servers users setadmin], menu.last(4).map { |item| item.fetch(:command) }
+    assert_equal %w[status servers users set_admin], menu.last(4).map { |item| item.fetch(:command) }
   end
 
   def test_status_and_servers_are_transient
@@ -42,7 +42,7 @@ class CommandMenuTest < Minitest::Test
   end
 
   def test_users_and_work_commands_remain_visible
-    %w[users setadmin apply_prices apply_price rates set_rate buy].each_with_index do |name, index|
+    %w[users set_admin apply_prices apply_price rates set_rate buy].each_with_index do |name, index|
       telegram = FakeTelegramAPI.new
       bot = build_bot(telegram: telegram)
       message_id = 700 + index
@@ -69,7 +69,7 @@ class CommandMenuTest < Minitest::Test
 
   def command_for(name)
     case name
-    when "setadmin" then "/setadmin 88"
+    when "set_admin" then "/set_admin 88"
     when "apply_price" then "/apply_price premium_6m 7.45"
     when "set_rate" then "/set_rate EUR 1.16"
     else "/#{name}"
