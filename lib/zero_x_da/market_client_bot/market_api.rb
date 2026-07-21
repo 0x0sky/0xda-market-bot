@@ -80,8 +80,21 @@ module ZeroXDA
         ).fetch("data")
       end
 
+      # Currency resources replaced the old fx-rate resources in core. Keep a
+      # stable command-facing shape so Bot does not depend on either API model.
       def fx_rates
-        get("v1/currencies", authenticated: true).fetch("data")
+        get("v1/currencies", authenticated: true).fetch("data").map do |currency|
+          attributes = currency.fetch("attributes")
+          code = attributes.fetch("code")
+          {
+            "type" => "fx_rate",
+            "id" => code,
+            "attributes" => {
+              "currency" => code,
+              "usdt_per_unit" => attributes["usdt_per_unit"]
+            }
+          }
+        end
       end
 
       # Compatibility adapter for the bot command. Currency rates now use the
@@ -101,7 +114,7 @@ module ZeroXDA
         rates.zip(applied).map do |rate, price|
           currency = rate.fetch(:currency).to_s.upcase
           {
-            "type" => "currency",
+            "type" => "fx_rate",
             "id" => currency,
             "attributes" => {
               "currency" => currency,
