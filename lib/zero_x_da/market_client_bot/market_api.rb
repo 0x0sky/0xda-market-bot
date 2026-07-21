@@ -84,12 +84,31 @@ module ZeroXDA
         get("v1/currencies", authenticated: true).fetch("data")
       end
 
+      # Compatibility adapter for the bot command. Currency rates now use the
+      # same pricing flow as every other catalog product.
       def set_fx_rates(actor_telegram_user_id:, rates:)
-        post(
-          "v1/admin/fx-rates",
+        prices = rates.map do |rate|
+          {
+            sku: rate.fetch(:currency).to_s.downcase,
+            amount_usdt: rate.fetch(:usdt_per_unit)
+          }
+        end
+        applied = apply_prices(
           actor_telegram_user_id: actor_telegram_user_id,
-          rates: rates
-        ).fetch("data")
+          prices: prices
+        )
+
+        rates.zip(applied).map do |rate, price|
+          currency = rate.fetch(:currency).to_s.upcase
+          {
+            "type" => "currency",
+            "id" => currency,
+            "attributes" => {
+              "currency" => currency,
+              "usdt_per_unit" => price.dig("attributes", "amount_usdt") || rate.fetch(:usdt_per_unit).to_s
+            }
+          }
+        end
       end
 
       def set_admin(actor_telegram_user_id:, target:)
