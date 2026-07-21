@@ -15,17 +15,6 @@ module ZeroXDA
         [command, argument]
       end
 
-      def sync_commands(chat_id, user)
-        locale = user.dig("attributes", "locale") || @telegram_update_locale || Locale::DEFAULT
-        commands = admin?(user) ? CommandMenu.admin(locale: locale) : CommandMenu.client(locale: locale)
-        commands = commands.map do |command|
-          command[:command] == "setadmin" ? command.merge(command: "set_admin") : command
-        end
-        @telegram_api.set_commands(commands, scope: { type: "chat", chat_id: chat_id })
-      rescue TelegramAPI::Error => error
-        warn "command menu sync failed: #{error.message}"
-      end
-
       def show_active_users(message)
         chat_id = message.fetch("chat").fetch("id")
         user = authenticate_user(message)
@@ -141,7 +130,13 @@ module ZeroXDA
       end
 
       def send_html_message(chat_id, text)
-        @telegram_api.send_message(chat_id: chat_id, text: text, parse_mode: "HTML")
+        parameters = @telegram_api.method(:send_message).parameters
+        accepts_parse_mode = parameters.any? do |kind, name|
+          kind == :keyrest || %i[key keyreq].include?(kind) && name == :parse_mode
+        end
+        return @telegram_api.send_message(chat_id: chat_id, text: text, parse_mode: "HTML") if accepts_parse_mode
+
+        @telegram_api.send_message(chat_id: chat_id, text: text)
       end
 
       def html(value)
