@@ -162,3 +162,5 @@ module ZeroXDA
     Bot.prepend(AdminMessages)
   end
 end
+
+require_relative "telegram_user_links"
