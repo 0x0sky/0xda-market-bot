@@ -2,7 +2,6 @@
 
 require "cgi"
 require_relative "locale"
-require_relative "admin_messages"
 
 module ZeroXDA
   module MarketClientBot
