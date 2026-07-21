@@ -81,7 +81,7 @@ module ZeroXDA
       end
 
       def fx_rates
-        get("v1/fx-rates", authenticated: true).fetch("data")
+        get("v1/currencies", authenticated: true).fetch("data")
       end
 
       def set_fx_rates(actor_telegram_user_id:, rates:)
