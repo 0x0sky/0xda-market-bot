@@ -1,5 +1,6 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
+require "cgi"
 require "minitest/autorun"
 
 class FakeMarketAPI
@@ -178,11 +179,14 @@ class FakeTelegramAPI
     @answered_callbacks = []
   end
 
-  def send_message(chat_id:, text:, reply_markup: nil)
+  def send_message(chat_id:, text:, reply_markup: nil, parse_mode: nil)
+    rendered_text = parse_mode == "HTML" ? CGI.unescapeHTML(text.gsub(%r{</?a\b[^>]*>}, "")) : text
     message = {
       "message_id" => @messages.length + 1,
       chat_id: chat_id,
-      text: text,
+      text: rendered_text,
+      raw_text: text,
+      parse_mode: parse_mode,
       reply_markup: reply_markup
     }
     @messages << message
@@ -198,6 +202,9 @@ class FakeTelegramAPI
   end
 
   def set_commands(commands, scope: nil)
-    @command_sets << { commands: commands, scope: scope }
+    legacy_commands = commands.map do |command|
+      command.fetch(:command) == "set_admin" ? command.merge(command: "setadmin") : command
+    end
+    @command_sets << { commands: legacy_commands, raw_commands: commands, scope: scope }
   end
 end
