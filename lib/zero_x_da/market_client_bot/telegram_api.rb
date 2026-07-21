@@ -16,9 +16,10 @@ module ZeroXDA
         @base_url = URI("https://api.telegram.org/bot#{token}/")
       end
 
-      def send_message(chat_id:, text:, reply_markup: nil)
+      def send_message(chat_id:, text:, reply_markup: nil, parse_mode: nil)
         payload = { chat_id: chat_id, text: text }
         payload[:reply_markup] = reply_markup if reply_markup
+        payload[:parse_mode] = parse_mode if parse_mode
         post("sendMessage", payload)
       end
 

@@ -15,7 +15,7 @@ module ZeroXDA
           status: "👤 account status",
           servers: "📊 server status",
           users: "👥 active users",
-          setadmin: "🔑 assign administrator",
+          set_admin: "🔑 assign administrator",
           apply_prices: "📦 apply prices",
           apply_price: "💰 set product price",
           rates: "💱 exchange rates (USDT base)",
@@ -27,7 +27,7 @@ module ZeroXDA
           status: "👤 власний статус",
           servers: "📊 стан серверів",
           users: "👥 активні користувачі",
-          setadmin: "🔑 призначити адміністратора",
+          set_admin: "🔑 призначити адміністратора",
           apply_prices: "📦 застосувати ціни",
           apply_price: "💰 встановити ціну продукту",
           rates: "💱 курси валют відносно USDT",
@@ -39,7 +39,7 @@ module ZeroXDA
           status: "👤 статус аккаунта",
           servers: "📊 состояние серверов",
           users: "👥 активные пользователи",
-          setadmin: "🔑 назначить администратора",
+          set_admin: "🔑 назначить администратора",
           apply_prices: "📦 применить цены",
           apply_price: "💰 установить цену продукта",
           rates: "💱 курсы валют относительно USDT",
@@ -51,7 +51,7 @@ module ZeroXDA
           status: "👤 état du compte",
           servers: "📊 état des serveurs",
           users: "👥 utilisateurs actifs",
-          setadmin: "🔑 nommer un administrateur",
+          set_admin: "🔑 nommer un administrateur",
           apply_prices: "📦 appliquer les prix",
           apply_price: "💰 définir le prix du produit",
           rates: "💱 taux de change (base USDT)",
@@ -63,7 +63,7 @@ module ZeroXDA
           status: "👤 estado de la cuenta",
           servers: "📊 estado de los servidores",
           users: "👥 usuarios activos",
-          setadmin: "🔑 asignar administrador",
+          set_admin: "🔑 asignar administrador",
           apply_prices: "📦 aplicar precios",
           apply_price: "💰 establecer precio del producto",
           rates: "💱 tipos de cambio (base USDT)",
@@ -75,7 +75,7 @@ module ZeroXDA
           status: "👤 Kontostatus",
           servers: "📊 Serverstatus",
           users: "👥 aktive Nutzer",
-          setadmin: "🔑 Administrator zuweisen",
+          set_admin: "🔑 Administrator zuweisen",
           apply_prices: "📦 Preise übernehmen",
           apply_price: "💰 Produktpreis festlegen",
           rates: "💱 Wechselkurse (USDT-Basis)",
@@ -85,7 +85,7 @@ module ZeroXDA
 
       CLIENT_COMMANDS = %i[buy status].freeze
       ADMIN_WORK_COMMANDS = %i[apply_prices apply_price rates set_rate].freeze
-      ADMIN_FOOTER_COMMANDS = %i[status servers users setadmin].freeze
+      ADMIN_FOOTER_COMMANDS = %i[status servers users set_admin].freeze
       ADMIN_COMMANDS = (ADMIN_WORK_COMMANDS + ADMIN_FOOTER_COMMANDS.drop(1)).freeze
       TRANSIENT_COMMANDS = %w[/status /servers].freeze
 
