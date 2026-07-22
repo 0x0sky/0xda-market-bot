@@ -1,16 +1,26 @@
 # VPS bot deployment
 
-This deployment runs the production Telegram bot as a separate service from
-`0xda-market` core.
+This deployment runs the development Telegram bot as a separate service from the
+`0xda-market` core on the same VPS.
 
-## Safety model
+## Current development model
 
-- the bot binds only to `127.0.0.1:10001` on the VPS;
-- Telegram webhook registration is disabled during parallel smoke testing;
-- the existing Render bot remains active until `app.nilx.one` HTTPS and bot
-  smoke tests pass;
-- the bot continues using the existing Render core until the core VPS cutover is
-  separately approved.
+- `master` is the active development branch;
+- no separate bot release branch is required at this stage;
+- Render is not treated as the production baseline;
+- the VPS is the environment where the bot is built, started and tested;
+- the bot binds only to `127.0.0.1:10001`;
+- Telegram webhook registration remains disabled until local and HTTPS smoke tests pass.
+
+## Public URL contract
+
+The project uses one market hostname:
+
+- `https://0xda-market.nilx.one` — core / market entry point;
+- `https://0xda-market.nilx.one/bot` — bot service and Telegram webhook boundary;
+- `https://0xda-market.nilx.one/webapp` — Telegram WebApp.
+
+`app.nilx.one` is unrelated to `0xda-market` and must not be used by this service.
 
 ## VPS layout
 
@@ -31,10 +41,9 @@ chmod 0600 /opt/0xda-market-bot/shared/.env
 ```
 
 Keep `REGISTER_TELEGRAM_WEBHOOK=0` for the first deployment. This allows the
-container and its core API connection to be verified without changing the live
-Telegram webhook.
+container and its core API connection to be verified without changing Telegram.
 
-## GitHub production environment
+## GitHub development environment
 
 Secrets:
 
@@ -46,9 +55,9 @@ Variable:
 
 - `VPS_BOT_DEPLOY_PATH=/opt/0xda-market-bot`
 
-The workflow uses SSH port `22022` directly.
+The workflow uses SSH port `22022` and deploys green `master` builds.
 
-## Parallel smoke test
+## Smoke test
 
 After a green deployment:
 
@@ -59,7 +68,7 @@ docker compose ps
 docker compose logs --tail 200 bot
 ```
 
-The service is not publicly reachable yet. The next reviewed change will route
-`app.nilx.one` through the existing VPS Caddy instance to `127.0.0.1:10001`.
-Only after HTTPS succeeds should `REGISTER_TELEGRAM_WEBHOOK` become `1` and the
-bot be redeployed to switch the Telegram webhook.
+The service remains private until Caddy routing for
+`https://0xda-market.nilx.one/bot` is added and verified. The WebApp is routed
+separately at `https://0xda-market.nilx.one/webapp`. Only after HTTPS and bot
+smoke tests pass should `REGISTER_TELEGRAM_WEBHOOK` become `1`.
