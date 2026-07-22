@@ -11,18 +11,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-vps-bot
-  cancel-in-progress: false
+  group: development-vps-bot
+  cancel-in-progress: true
 
 jobs:
   deploy:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      startsWith(github.event.workflow_run.head_branch, 'release')
+      github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    environment: development
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
@@ -53,14 +53,14 @@ jobs:
           chmod 0600 "$HOME/.ssh/id_ed25519"
           ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >>"$HOME/.ssh/known_hosts"
 
-      - name: Upload release
+      - name: Upload build
         run: |
           set -Eeuo pipefail
           archive="/tmp/0xda-market-bot-${RELEASE_SHA}.tar.gz"
           tar --exclude=.git --exclude='deploy/vps/.env' -czf "$archive" .
           scp -P "$VPS_PORT" "$archive" "$VPS_USER@$VPS_HOST:/tmp/"
 
-      - name: Activate release
+      - name: Activate build
         run: |
           set -Eeuo pipefail
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
