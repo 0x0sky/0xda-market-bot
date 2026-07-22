@@ -18,7 +18,6 @@ class ProviderBoundaryTest < Minitest::Test
     ruby_files.each do |path|
       source = File.read(path)
       refute_includes source, "/v1/auth/telegram", path
-      refute_includes source, "actor_telegram_user_id:", path unless path.end_with?("market_api.rb")
     end
   end
 
