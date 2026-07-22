@@ -1,4 +1,4 @@
-name: zero-x-da-market-bot
+name: zero-x-da-market-bot-${DEPLOY_ENV}
 
 services:
   bot:

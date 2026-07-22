@@ -21,4 +21,6 @@ jobs:
           ruby-version: 3.3.11
       - run: bundle install
       - run: bundle exec rake
+      - name: Validate VPS scripts
+        run: bash -n deploy/vps/deploy.sh
       - run: docker build --tag 0xda-market-bot .
