@@ -14,6 +14,7 @@ module ZeroXDA
       RETRYABLE_STATUS_CODES = %w[502 503 504].freeze
       RETRY_BACKOFF_SECONDS = [2, 4, 8, 16, 30].freeze
       TRANSIENT_ERRORS = [IOError, SystemCallError, Timeout::Error].freeze
+      TELEGRAM_PROVIDER = "telegram"
 
       class RetryableResponseError < StandardError; end
 
@@ -34,15 +35,20 @@ module ZeroXDA
         @sleeper = sleeper
       end
 
+      # Telegram is translated at the adapter boundary. Core receives only the
+      # generic external-identity contract and returns an internal market user.
       def authenticate_telegram(user:, chat:)
         document = post(
-          "v1/auth/telegram",
-          telegram_user_id: user.fetch("id"),
-          chat_id: chat.fetch("id"),
-          username: user["username"],
-          first_name: user["first_name"],
-          last_name: user["last_name"],
-          language_code: user["language_code"]
+          "v1/auth/external",
+          provider: TELEGRAM_PROVIDER,
+          provider_user_id: user.fetch("id").to_s,
+          provider_data: {
+            chat_id: chat.fetch("id").to_s,
+            username: user["username"],
+            first_name: user["first_name"],
+            last_name: user["last_name"],
+            language_code: user["language_code"]
+          }.compact
         )
         document.fetch("data")
       end
@@ -51,8 +57,10 @@ module ZeroXDA
         get("health", authenticated: false, allow_error_status: true)
       end
 
+      # Keep Telegram presentation fields local to the bot. The core response
+      # remains provider-neutral and exposes identities[] only.
       def active_users
-        get("v1/users?status=active", authenticated: true).fetch("data")
+        raw_active_users.map { |profile| adapt_user_profile(profile) }
       end
 
       def products(locale: "en_US")
@@ -62,20 +70,22 @@ module ZeroXDA
         ).fetch("data")
       end
 
-      def price_proposal(actor_telegram_user_id:, locale: "en_US")
+      def price_proposal(actor_user_id: nil, actor_telegram_user_id: nil, locale: "en_US")
+        actor_user_id ||= internal_user_id_for_telegram(actor_telegram_user_id)
         get(
           "v1/admin/prices/proposal?#{URI.encode_www_form(
-            actor_telegram_user_id: actor_telegram_user_id,
+            actor_user_id: actor_user_id,
             locale: locale
           )}",
           authenticated: true
         ).fetch("data")
       end
 
-      def apply_prices(actor_telegram_user_id:, prices:)
+      def apply_prices(actor_user_id: nil, actor_telegram_user_id: nil, prices:)
+        actor_user_id ||= internal_user_id_for_telegram(actor_telegram_user_id)
         post(
           "v1/admin/prices",
-          actor_telegram_user_id: actor_telegram_user_id,
+          actor_user_id: actor_user_id,
           prices: prices
         ).fetch("data")
       end
@@ -97,19 +107,15 @@ module ZeroXDA
         end
       end
 
-      # Compatibility adapter for the bot command. Currency rates now use the
-      # same pricing flow as every other catalog product.
-      def set_fx_rates(actor_telegram_user_id:, rates:)
+      def set_fx_rates(actor_user_id: nil, actor_telegram_user_id: nil, rates:)
+        actor_user_id ||= internal_user_id_for_telegram(actor_telegram_user_id)
         prices = rates.map do |rate|
           {
             sku: rate.fetch(:currency).to_s.downcase,
             amount_usdt: rate.fetch(:usdt_per_unit)
           }
         end
-        applied = apply_prices(
-          actor_telegram_user_id: actor_telegram_user_id,
-          prices: prices
-        )
+        applied = apply_prices(actor_user_id: actor_user_id, prices: prices)
 
         rates.zip(applied).map do |rate, price|
           currency = rate.fetch(:currency).to_s.upcase
@@ -124,15 +130,78 @@ module ZeroXDA
         end
       end
 
-      def set_admin(actor_telegram_user_id:, target:)
-        post(
+      # Telegram-facing references are resolved to internal UUIDs here before
+      # calling the provider-neutral core API.
+      def set_admin(actor_user_id: nil, actor_telegram_user_id: nil, target:)
+        actor_user_id ||= internal_user_id_for_telegram(actor_telegram_user_id)
+        profile = resolve_telegram_target(target)
+        assignment = post(
           "v1/admin/users/set-admin",
-          actor_telegram_user_id: actor_telegram_user_id,
-          target: target
+          actor_user_id: actor_user_id,
+          target_user_id: profile.fetch("id")
         ).fetch("data")
+        assignment["attributes"] = profile.fetch("attributes").merge(
+          assignment.fetch("attributes")
+        )
+        assignment
       end
 
       private
+
+      def raw_active_users
+        get("v1/users?status=active", authenticated: true).fetch("data")
+      end
+
+      def adapt_user_profile(profile)
+        attributes = profile.fetch("attributes")
+        identities = attributes.fetch("identities", [])
+        telegram = identities.find { |identity| identity["provider"] == TELEGRAM_PROVIDER }
+        data = telegram&.fetch("provider_data", {}) || {}
+
+        profile.merge(
+          "attributes" => attributes.merge(
+            "telegram_user_id" => telegram&.fetch("provider_user_id", nil),
+            "telegram_chat_id" => data["chat_id"],
+            "telegram_username" => data["username"],
+            "telegram_first_name" => data["first_name"],
+            "telegram_last_name" => data["last_name"],
+            "language_code" => data["language_code"]
+          )
+        )
+      end
+
+      def internal_user_id_for_telegram(telegram_user_id)
+        identifier = telegram_user_id.to_s
+        raise ArgumentError, "actor Telegram user ID must not be empty" if identifier.empty?
+
+        profile = active_users.find do |entry|
+          entry.dig("attributes", "telegram_user_id").to_s == identifier
+        end
+        raise Error.new("Actor user is not registered", code: "not_found") unless profile
+
+        profile.fetch("id")
+      end
+
+      def resolve_telegram_target(target)
+        normalized = target.to_s.strip
+        raise ArgumentError, "target must not be empty" if normalized.empty?
+
+        profiles = active_users
+        profile = if normalized.start_with?("@")
+                    username = normalized.delete_prefix("@").downcase
+                    profiles.find do |entry|
+                      entry.dig("attributes", "telegram_username").to_s.downcase == username
+                    end
+                  else
+                    profiles.find do |entry|
+                      entry.fetch("id") == normalized ||
+                        entry.dig("attributes", "telegram_user_id").to_s == normalized
+                    end
+                  end
+        raise Error.new("Target user is not registered", code: "not_found") unless profile
+
+        profile
+      end
 
       def get(path, authenticated:, allow_error_status: false)
         uri = URI.join(@base_url, path)

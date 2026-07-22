@@ -20,7 +20,21 @@ jobs:
         with:
           ruby-version: 3.3.11
       - run: bundle install
-      - run: bundle exec rake
+      - name: Run tests
+        id: tests
+        run: |
+          set -o pipefail
+          bundle exec rake >test.log 2>&1 || {
+            cat test.log
+            exit 1
+          }
+      - name: Upload test failure log
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
+          retention-days: 3
       - name: Validate VPS scripts
         run: bash -n deploy/vps/deploy.sh
       - run: docker build --tag 0xda-market-bot .
