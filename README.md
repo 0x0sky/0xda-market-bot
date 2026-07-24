@@ -1,183 +1,172 @@
 # 0xda-market Bot
 
-Private Telegram interface for `0xda-market` clients.
+Private Telegram client interface for the provider-agnostic `0xda-market` core.
 
-The bot is a thin Telegram interface over the market core. It authenticates users
-through the core API, renders the active catalog, exposes admin-only operations,
-and never connects to PostgreSQL directly. The core remains the source of truth
-for users, roles, products, prices and permissions.
+The bot authenticates Telegram identities through the generic core API, renders
+the database-backed catalog and exposes role-gated administrator operations. It
+does not connect to PostgreSQL directly and does not own users, roles, products,
+prices or permissions.
 
 ## Runtime
 
 - Ruby `3.3.11`
-- Rack + Puma web service
-- Render web services for test and production
-- Render cron service for the production admin price digest
+- Rack + Puma
+- Docker Compose on the project VPS
+- Caddy routing from `https://0xda-market.nilx.one/bot/*`
+- private shared Docker network `zero-x-da-market-edge`
 
 HTTP surface:
 
-- `GET /health` — bot health, UTC server time and deployed Git revision
-- `POST /telegram/webhook` — Telegram webhook, authorized with
+- `GET /health` — bot health and server time
+- `POST /telegram/webhook` — Telegram webhook authorized with
   `X-Telegram-Bot-Api-Secret-Token`
 
-Webhook requests are accepted quickly and dispatched in the background, so
-Telegram does not have to wait for slow core wake-ups. For supported commands the
-bot sends `0xda-market запускається…` if the core is still waking up.
+The public Caddy route strips `/bot`, so
+`https://0xda-market.nilx.one/bot/telegram/webhook` reaches the internal
+`/telegram/webhook` route.
 
-Market API calls retry temporary `502`, `503`, `504`, transport errors and
-transient non-JSON responses with exponential backoff.
+Market API calls retry temporary `502`, `503`, `504`, transport failures and
+transient non-JSON responses with exponential backoff. Slow commands may send a
+localized server-starting notice while the core becomes available.
 
-## Telegram Commands
+## Architecture boundary
 
-Default public command scope contains only `/start`. After authentication the bot
-syncs a private command scope for the current chat.
+```text
+Telegram update
+  -> MarketClientBot
+  -> MarketAPI anti-corruption layer
+  -> generic external-identity/core contract
+  -> internal market user UUID
+```
+
+Telegram IDs, usernames, chat IDs and profile copy remain in this adapter. The
+core receives provider-neutral identity payloads and internal UUIDs for privileged
+actions.
+
+## Telegram commands
+
+The default public scope contains `/start`. After authentication the bot syncs a
+private command scope for the current chat.
 
 Client commands:
 
-- `/start` — passwordless Telegram authentication
-- `/status` — current persisted role and account status; the response is removed
-  after three seconds
+- `/start` — authenticate the Telegram identity
 - `/buy` — open the active product catalog
+- `/status` — show the persisted role and account status
 
-Admin commands:
+Administrator commands:
 
-- `/servers` — health and UTC server time for market core and bot
-- `/users` — active Telegram users; shows Telegram ID, internal UUID and role
-- `/setadmin @username` or `/setadmin TELEGRAM_ID` — promote a registered user
-- `/apply_prices` — open the current price application form
-- `/apply_price <sku|position|short name> <amount>` — apply one product price in
-  USDT
+- `/apply_prices` — review the database-defined price proposal
+- `/apply_price <sku|position|name> <amount>` — apply one USDT price
+- `/rates` — show currency products and rates
+- `/set_rate <currency> <amount>` — update a currency product price
+- `/servers` — show core and bot health
+- `/users` — show active users as Telegram profile links
+- `/set_admin @username|TELEGRAM_ID` — assign the persisted admin role
 
-Clients do not see or execute admin commands. The bot hides admin commands from
-non-admin chats, and the core still verifies the persisted admin role for every
-admin operation.
+Non-admin chats do not receive administrator commands, and the core independently
+checks the internal admin role for every privileged operation.
 
-## Catalog
+## Catalog and pricing
 
-`/buy` loads active products from `GET /v1/products?locale=...` and renders the
-first nine products as a 3x3 inline keyboard. Product callbacks use the stable
-`buy_<sku>` contract.
+`/buy` loads active products from `GET /v1/products?locale=...`. Product rows,
+ordering, button labels, full names, short names and prices come from the core
+database. Callback data uses the stable `buy_<sku>` contract.
 
-Catalog rules:
+The initial marketable catalog contains Telegram Premium 3/6/12 months, Telegram
+Stars 500/1000/3000, TON, BTC and ETH. Currency rows are exposed separately by the
+core and use the same unified pricing flow.
 
-- product rows are never hardcoded in the bot
-- button text comes from `attributes.button_label` or `attributes.name`
-- callback SKU is the product `id`
-- full names, button labels, ordering and short names come from the core database
-- Telegram `language_code=uk` resolves to `uk_UA`; unsupported or absent
-  language codes fall back to `en_US`
-- the bot stays provider-agnostic and database-agnostic
+Supported interface locales are English, Ukrainian, Russian, French, Spanish and
+German. Unknown languages fall back to `en_US`.
 
-## Price Application
+`/apply_prices` uses localized core proposal data and renders current/previous
+prices, application timestamps and clickable editor identities without exposing
+internal UUIDs in Telegram messages.
 
-Admins can apply product prices through Telegram without touching the database.
+## VPS deployment
 
-`/apply_prices` requests localized `GET /v1/admin/prices/proposal` data and sends
-a form with database-defined product positions, SKUs, full names, yesterday and
-current prices, the internal editor UUID and application time. Product rows are
-never duplicated in a bot template. Only interface copy belongs to the bot's
-`en_US` / `uk_UA` message catalog.
+The VPS is the canonical runtime. The old Render Blueprint is not part of the
+supported deployment path.
 
-`/apply_price` accepts a product reference and amount in USDT:
+Current automation is development-only:
 
-```text
-/apply_price premium_6m 7.45
-/apply_price 2 7.45
-/apply_price prem 6 7.45
+- `master` deploys to the GitHub `development` environment after green CI;
+- the runtime file is
+  `/opt/0xda-market-bot/environments/development/shared/.env`;
+- the bot binds to `127.0.0.1:10001` and joins the private edge network as
+  `market-bot`;
+- an inactive environment is staged without switching the active marker;
+- an active refresh is health-gated and attempts to restart the previous release
+  on failure.
+
+Production directories remain reserved, but production deployment is not enabled
+by the current workflow. Enabling it requires a separate reviewed change paired
+with the core release path.
+
+See [`deploy/vps/README.md`](deploy/vps/README.md) and the core
+[`deploy/vps/OPERATIONS.md`](https://github.com/0xda-market/0xda-market/blob/master/deploy/vps/OPERATIONS.md).
+
+## Environment variables
+
+The active bot runtime file contains:
+
+- `DEPLOY_ENV` — `development` or `production`, matching its directory
+- `PORT` — internal Puma port, normally `10000`
+- `TELEGRAM_BOT_TOKEN` — token for the exact environment bot
+- `TELEGRAM_WEBHOOK_SECRET` — webhook request secret
+- `MARKET_API_URL` — matching core URL, normally
+  `https://0xda-market.nilx.one`
+- `MARKET_API_TOKEN` — matching core `PUBLIC_API_TOKEN`
+- `PUBLIC_URL` — `https://0xda-market.nilx.one/bot`
+- `REGISTER_TELEGRAM_WEBHOOK` — explicit webhook registration gate
+
+Runtime values live only in protected VPS `.env` files. Production and
+development must use distinct Telegram, webhook and core API tokens.
+
+## Scheduled price digest
+
+`bin/send_price_digest` sends the price proposal to active administrators at
+07:00 Central European time. The script itself chooses the correct 05:00 or 06:00
+UTC candidate run for CET/CEST.
+
+The VPS systemd timer runs both candidate hours. It executes only when
+`production` is the active environment and the production bot container is
+healthy. Development runs are skipped without sending anything.
+
+Install or refresh the timer on the VPS:
+
+```sh
+cd /opt/0xda-market-bot/environments/development/current/deploy/vps
+sudo ./install-systemd.sh
+systemctl list-timers 0xda-market-price-digest.timer
 ```
 
-The product reference can be a SKU, catalog position or unambiguous short name.
-Amounts support up to six decimal places. Until a new price is submitted, the
-last applied price remains in effect.
+Inspect a run:
 
-## Daily Price Digest
+```sh
+journalctl -u 0xda-market-price-digest.service --since today
+```
 
-`bin/send_price_digest` sends the price application form to every active admin.
-Render runs it as `0xda-market-price-digest` at `05:00` and `06:00` UTC. The
-script delivers only when that run matches `07:00` Central European Time, so CET
-and CEST are handled without editing the cron schedule.
-
-Manual run:
+Manual application-level run:
 
 ```sh
 FORCE_PRICE_DIGEST=1 bundle exec ruby bin/send_price_digest
 ```
 
-The cron service uses the production Telegram bot token and production market
-core by default.
-
-## Environments
-
-Two Telegram bots and two Render web services map one-to-one onto the two market
-cores. Environment variables on a bot service are static: a service never
-switches environments, only code moves between branches.
-
-| | test | production |
-| --- | --- | --- |
-| Git branch | `master` | `release` |
-| Render service | `0xda-market-test-bot` | `0xda-market-bot` |
-| Telegram bot | test bot | production bot |
-| `MARKET_API_URL` | `https://zeroxda-market-test.onrender.com` | `https://zeroxda-market.onrender.com` |
-| `MARKET_API_TOKEN` | test core `PUBLIC_API_TOKEN` | production core `PUBLIC_API_TOKEN` |
-| Supabase | `0xda-market-test` through the test core | `0xda-market` through the production core |
-
-Code reaches production through a pull request from `master` to the protected
-`release` branch. Render deploys each service from the branch declared in
-`render.yaml` after the `test` CI check passes.
-
-The post-CI deployment gate polls `/health` until its `revision` matches the
-exact tested commit. Render supplies this value through `RENDER_GIT_COMMIT`, so
-the release tag cannot be created from an unverified production revision.
-
-## Environment Variables
-
-Configure these variables per Render web service:
-
-- `TELEGRAM_BOT_TOKEN` — BotFather token for that exact Telegram bot
-- `TELEGRAM_WEBHOOK_SECRET` — random webhook secret for Telegram requests
-- `MARKET_API_URL` — matching core API URL for the same environment
-- `MARKET_API_TOKEN` — matching core `PUBLIC_API_TOKEN`
-- `PUBLIC_URL` — fallback public service URL outside Render
-- `RENDER_EXTERNAL_URL` — canonical service URL supplied automatically by Render
-
-Configure these variables on the price digest cron service:
-
-- `TELEGRAM_BOT_TOKEN` — production bot token
-- `MARKET_API_URL` — production core URL
-- `MARKET_API_TOKEN` — production core `PUBLIC_API_TOKEN`
-- `FORCE_PRICE_DIGEST` — optional manual override; set to `1` only for manual
-  runs
-
-Secrets must be configured in Render and must not be committed. Production and
-test must use distinct bot tokens, webhook secrets and API tokens.
-
-## Versioning and releases
-
-Stable releases use Semantic Versioning tags such as `v0.1.0`. Notable changes
-are curated in [CHANGELOG.md](CHANGELOG.md); the promotion, tag, draft-release
-and rollback procedure is documented in [RELEASING.md](RELEASING.md).
-
-## Local Development
-
-Install dependencies:
+## Local development
 
 ```sh
 bundle install
-```
-
-Run tests:
-
-```sh
 bundle exec rake
-```
 
-Run the Rack app locally:
-
-```sh
+DEPLOY_ENV=development \
 TELEGRAM_BOT_TOKEN=... \
 TELEGRAM_WEBHOOK_SECRET=... \
-MARKET_API_URL=https://zeroxda-market-test.onrender.com \
+MARKET_API_URL=https://0xda-market.nilx.one \
 MARKET_API_TOKEN=... \
+PUBLIC_URL=http://localhost:9292 \
+REGISTER_TELEGRAM_WEBHOOK=0 \
 bundle exec rackup
 ```
 
@@ -186,3 +175,9 @@ Check health:
 ```sh
 curl http://localhost:9292/health
 ```
+
+## Versioning and releases
+
+Stable releases use Semantic Versioning tags such as `v0.1.0`. Notable changes
+are curated in [CHANGELOG.md](CHANGELOG.md); promotion and rollback are documented
+in [RELEASING.md](RELEASING.md).
