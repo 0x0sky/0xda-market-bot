@@ -1,0 +1,14 @@
+[Unit]
+Description=0xda Market production price digest
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/usr/local/sbin/0xda-market-price-digest
+
+[Install]
+WantedBy=multi-user.target
