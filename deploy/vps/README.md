@@ -1,18 +1,26 @@
 # VPS bot deployment
 
 The client bot runs on the same VPS as the provider-agnostic `0xda-market` core.
-The VPS is active/passive: both environments may be staged, but only one matching
-core + bot pair may run at a time.
+Caddy in the core stack owns public HTTPS and forwards `/bot/*` over the private
+external network `zero-x-da-market-edge` to the alias `market-bot`.
 
-## Environment contract
+The VPS is the canonical bot runtime. Render configuration is no longer part of
+the supported deployment path.
 
-| GitHub environment | Branch | Telegram bot | Database |
+## Current deployment contract
+
+Automated deployment is development-only:
+
+| GitHub environment | Branch | Telegram bot | Runtime directory |
 | --- | --- | --- | --- |
-| `development` | `master` | `@zeroxda_market_test_bot` | test Supabase |
-| `production` | `release*` | `@zeroxda_market_bot` | production Supabase |
+| `development` | `master` | test bot | `environments/development` |
 
-`DEPLOY_ENV` is the only runtime environment marker. It must match the GitHub
-Environment and the VPS directory containing the runtime file.
+Production directories remain reserved, but the current workflow does not deploy
+`release*` or production. Enabling production requires a separate reviewed change
+paired with the core production workflow.
+
+`DEPLOY_ENV` is the only runtime environment marker. It must match the runtime
+file and its VPS directory.
 
 ## VPS layout
 
@@ -30,18 +38,15 @@ Environment and the VPS directory containing the runtime file.
 /opt/0xda-market-runtime/active-environment
 ```
 
-The core repository owns the manual `Switch VPS Environment` workflow. A bot
-deployment never changes the active environment by itself.
+The core repository owns the `Switch VPS Environment` controller. A bot deploy
+never switches the active environment by itself.
 
-Core Caddy and the active bot share the private external Docker network
-`zero-x-da-market-edge`. The bot keeps its host port bound to
-`127.0.0.1:10001` and also exposes the internal network alias `market-bot` for
-Caddy. The deploy script creates the shared network when it is missing.
+The bot binds to `127.0.0.1:10001` for local smoke checks and exposes internal
+port `10000` as `market-bot` on the shared edge network.
 
-## GitHub environments
+## GitHub development environment
 
-Create `development` and `production` in `0xda-market/0xda-market-bot`.
-Each requires:
+Configure `development` with:
 
 - secret `VPS_HOST`;
 - secret `VPS_USER=deploy`;
@@ -50,19 +55,18 @@ Each requires:
 
 The workflow uses fixed SSH port `22022`. Do not add `VPS_PORT`.
 
-## Runtime files
+## Runtime file
 
 ```text
 /opt/0xda-market-bot/environments/development/shared/.env
-/opt/0xda-market-bot/environments/production/shared/.env
 ```
 
-Development example:
+Example:
 
 ```env
 DEPLOY_ENV=development
 PORT=10000
-TELEGRAM_BOT_TOKEN=<@zeroxda_market_test_bot value>
+TELEGRAM_BOT_TOKEN=<test bot value>
 TELEGRAM_WEBHOOK_SECRET=<development value>
 MARKET_API_URL=https://0xda-market.nilx.one
 MARKET_API_TOKEN=<development core API value>
@@ -70,41 +74,27 @@ REGISTER_TELEGRAM_WEBHOOK=0
 PUBLIC_URL=https://0xda-market.nilx.one/bot
 ```
 
-Production uses `DEPLOY_ENV=production`, `@zeroxda_market_bot`, and separate
-webhook and core API values. Runtime values live only in the VPS `.env` files,
-not in GitHub Environment secrets.
-
-Protect both files:
+Protect the file:
 
 ```sh
 chown deploy:deploy /opt/0xda-market-bot/environments/*/shared/.env
 chmod 0600 /opt/0xda-market-bot/environments/*/shared/.env
 ```
 
-Keep `REGISTER_TELEGRAM_WEBHOOK=0` until local and HTTPS smoke checks pass.
+Keep `REGISTER_TELEGRAM_WEBHOOK=0` until local and public smoke checks pass.
+Webhook registration remains a separate reviewed operation.
 
 ## Deployment behavior
 
-After green CI:
+After green CI, `master` stages or refreshes `development`.
 
-- `master` stages or refreshes `development`;
-- `release*` stages or refreshes `production`;
-- an inactive environment is built but not started;
-- the active environment is refreshed and health-gated;
-- a failed active refresh attempts to restart the previous release.
+- an inactive release is built but not started;
+- the active development bot is refreshed and health-gated;
+- a failed active refresh attempts to restart the previous release;
+- only the active bot joins the edge network with the `market-bot` alias;
+- deployment never changes DNS, Caddy routing or Telegram webhook state.
 
-Both environments bind the bot to `127.0.0.1:10001`, so they cannot run
-simultaneously. Only the active bot joins the shared edge network with the
-`market-bot` alias.
-
-## Switching and smoke checks
-
-Use `Switch VPS Environment` in `0xda-market/0xda-market`. The controller starts
-the selected core first, then its matching bot, and rolls back if activation
-fails. Choosing `production` is the explicit cutover confirmation and may also
-require GitHub Environment review.
-
-After development is active:
+## Smoke checks
 
 ```sh
 cat /opt/0xda-market-runtime/active-environment
@@ -115,12 +105,42 @@ docker compose ps
 docker compose logs --tail 200 bot
 ```
 
-Public boundaries remain:
+Caddy strips the `/bot` prefix, so public
+`/bot/telegram/webhook` maps to internal `/telegram/webhook`.
 
-- `https://0xda-market.nilx.one` — core;
-- `https://0xda-market.nilx.one/bot` — Telegram bot;
-- `https://0xda-market.nilx.one/webapp` — Telegram WebApp.
+The complete cross-repository verifier lives in the active core release:
 
-Caddy strips the `/bot` prefix before forwarding requests to the bot, so the
-public webhook `/bot/telegram/webhook` maps to the bot route
-`/telegram/webhook`. Webhook activation remains a separate reviewed gate.
+```sh
+sudo -u deploy \
+  bash /opt/0xda-market/environments/development/current/deploy/vps/verify.sh
+```
+
+## Scheduled price digest
+
+The price digest is hosted on the VPS through systemd, not Render.
+
+Install or refresh the timer as root:
+
+```sh
+cd /opt/0xda-market-bot/environments/development/current/deploy/vps
+sudo ./install-systemd.sh
+```
+
+The timer runs at 05:00 and 06:00 UTC. `run-price-digest.sh` executes only when
+production is active; `bin/send_price_digest` selects the run corresponding to
+07:00 CET/CEST.
+
+```sh
+systemctl list-timers 0xda-market-price-digest.timer
+journalctl -u 0xda-market-price-digest.service --since today
+```
+
+## Operations
+
+Reboot, HTTPS, health, logs, backups and rollback are documented centrally in
+`0xda-market/0xda-market`:
+
+- `deploy/vps/OPERATIONS.md`
+
+Do not disable or delete the previous host as part of an application deployment.
+That is a separate irreversible operation requiring explicit owner approval.
