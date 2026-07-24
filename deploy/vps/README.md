@@ -33,6 +33,11 @@ Environment and the VPS directory containing the runtime file.
 The core repository owns the manual `Switch VPS Environment` workflow. A bot
 deployment never changes the active environment by itself.
 
+Core Caddy and the active bot share the private external Docker network
+`zero-x-da-market-edge`. The bot keeps its host port bound to
+`127.0.0.1:10001` and also exposes the internal network alias `market-bot` for
+Caddy. The deploy script creates the shared network when it is missing.
+
 ## GitHub environments
 
 Create `development` and `production` in `0xda-market/0xda-market-bot`.
@@ -89,19 +94,22 @@ After green CI:
 - a failed active refresh attempts to restart the previous release.
 
 Both environments bind the bot to `127.0.0.1:10001`, so they cannot run
-simultaneously.
+simultaneously. Only the active bot joins the shared edge network with the
+`market-bot` alias.
 
 ## Switching and smoke checks
 
 Use `Switch VPS Environment` in `0xda-market/0xda-market`. The controller starts
 the selected core first, then its matching bot, and rolls back if activation
-fails. Production requires explicit confirmation and GitHub Environment review.
+fails. Choosing `production` is the explicit cutover confirmation and may also
+require GitHub Environment review.
 
 After development is active:
 
 ```sh
 cat /opt/0xda-market-runtime/active-environment
 curl -i http://127.0.0.1:10001/health
+curl -i https://0xda-market.nilx.one/bot/health
 cd /opt/0xda-market-bot/environments/development/current/deploy/vps
 docker compose ps
 docker compose logs --tail 200 bot
@@ -113,4 +121,6 @@ Public boundaries remain:
 - `https://0xda-market.nilx.one/bot` — Telegram bot;
 - `https://0xda-market.nilx.one/webapp` — Telegram WebApp.
 
-Caddy routing and webhook activation remain separate reviewed gates.
+Caddy strips the `/bot` prefix before forwarding requests to the bot, so the
+public webhook `/bot/telegram/webhook` maps to the bot route
+`/telegram/webhook`. Webhook activation remains a separate reviewed gate.
