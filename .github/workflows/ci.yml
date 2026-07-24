@@ -35,6 +35,11 @@ jobs:
           name: test-log
           path: test.log
           retention-days: 3
-      - name: Validate VPS scripts
-        run: bash -n deploy/vps/deploy.sh
+      - name: Validate VPS deployment configuration
+        run: |
+          bash -n deploy/vps/deploy.sh
+          cat >deploy/vps/.env <<'ENV'
+          DEPLOY_ENV=development
+          ENV
+          docker compose --file deploy/vps/compose.yaml --env-file deploy/vps/.env config --quiet
       - run: docker build --tag 0xda-market-bot .
